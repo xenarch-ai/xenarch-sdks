@@ -1,0 +1,32 @@
+{
+  "name": "xenarch-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "CLI for interacting with the Xenarch payment network",
+  "bin": {
+    "xenarch": "./dist/bin/xenarch.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx bin/xenarch.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^13.0.0",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

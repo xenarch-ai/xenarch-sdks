@@ -1,0 +1,21 @@
+#!/bin/bash
+# Require Linear issue reference (XEN-XX) or [no-issue] in commit messages
+
+MSG=$(cat "$1")
+
+# Check for XEN- reference or [no-issue] escape hatch
+if echo "$MSG" | grep -qiE '(XEN-[0-9]+|\[no-issue\])'; then
+  exit 0
+fi
+
+echo ""
+echo "ERROR: Commit message must reference a Linear issue (XEN-XX) or include [no-issue]."
+echo ""
+echo "Examples:"
+echo '  feat: add payment endpoint'
+echo ''
+echo '  XEN-42'
+echo ''
+echo '  fix: correct typo in README [no-issue]'
+echo ""
+exit 1
