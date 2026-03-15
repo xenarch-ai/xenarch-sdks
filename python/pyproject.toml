@@ -1,0 +1,18 @@
+[project]
+name = "xenarch"
+version = "0.1.0"
+description = "Python SDK for Xenarch — payment middleware for AI agents"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+fastapi = ["fastapi>=0.100"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "fastapi>=0.100"]
