@@ -5,6 +5,11 @@ import type {
   AgentRegisterResponse,
   ApiError,
   PayJsonPricing,
+  PublisherRegisterResponse,
+  SiteCreateResponse,
+  SiteListItem,
+  SiteStatsResponse,
+  PayoutUpdateResponse,
 } from "../types.js";
 
 export interface FetchGateResult {
@@ -100,4 +105,105 @@ export async function fetchPayJson(
   } catch {
     return null;
   }
+}
+
+// --- Publisher API ---
+
+export async function registerPublisher(
+  apiBase: string,
+  email: string,
+  password: string,
+): Promise<PublisherRegisterResponse> {
+  const res = await fetch(`${apiBase}/v1/publishers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    const err = (await res.json()) as ApiError;
+    throw new Error(`Registration failed: ${err.message}`);
+  }
+
+  return (await res.json()) as PublisherRegisterResponse;
+}
+
+export async function createSite(
+  apiBase: string,
+  authToken: string,
+  domain: string,
+): Promise<SiteCreateResponse> {
+  const res = await fetch(`${apiBase}/v1/sites`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: JSON.stringify({ domain }),
+  });
+
+  if (!res.ok) {
+    const err = (await res.json()) as ApiError;
+    throw new Error(`Failed to add site: ${err.message}`);
+  }
+
+  return (await res.json()) as SiteCreateResponse;
+}
+
+export async function listSites(
+  apiBase: string,
+  authToken: string,
+): Promise<SiteListItem[]> {
+  const res = await fetch(`${apiBase}/v1/sites`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+
+  if (!res.ok) {
+    const err = (await res.json()) as ApiError;
+    throw new Error(`Failed to list sites: ${err.message}`);
+  }
+
+  return (await res.json()) as SiteListItem[];
+}
+
+export async function getSiteStats(
+  apiBase: string,
+  authToken: string,
+  siteId: string,
+): Promise<SiteStatsResponse> {
+  const res = await fetch(`${apiBase}/v1/sites/${siteId}/stats`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+
+  if (!res.ok) {
+    const err = (await res.json()) as ApiError;
+    throw new Error(`Failed to get stats: ${err.message}`);
+  }
+
+  return (await res.json()) as SiteStatsResponse;
+}
+
+export async function updatePayout(
+  apiBase: string,
+  authToken: string,
+  wallet: string,
+  password: string,
+  network: string = "base",
+): Promise<PayoutUpdateResponse> {
+  const res = await fetch(`${apiBase}/v1/publishers/me/payout`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${authToken}`,
+      "X-Confirm-Password": password,
+    },
+    body: JSON.stringify({ wallet, network }),
+  });
+
+  if (!res.ok) {
+    const err = (await res.json()) as ApiError;
+    throw new Error(`Failed to update payout: ${err.message}`);
+  }
+
+  return (await res.json()) as PayoutUpdateResponse;
 }

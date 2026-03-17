@@ -12,6 +12,7 @@ export interface Config {
   api_base: string;
   rpc_url: string;
   network: string;
+  auth_token: string | null;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -19,6 +20,7 @@ export const DEFAULT_CONFIG: Config = {
   api_base: "https://xenarch.bot",
   rpc_url: "https://mainnet.base.org",
   network: "base",
+  auth_token: null,
 };
 
 // --- API Responses ---
@@ -68,6 +70,39 @@ export interface ApiError {
   error: string;
   message: string;
   code: number;
+}
+
+// --- Publisher API Responses ---
+
+export interface PublisherRegisterResponse {
+  id: string;
+  api_key: string;
+}
+
+export interface SiteCreateResponse {
+  id: string;
+  site_token: string;
+}
+
+export interface SiteListItem {
+  id: string;
+  domain: string;
+  default_price_usd: string;
+  created_at: string;
+}
+
+export interface SiteStatsResponse {
+  total_gates: number;
+  total_paid: number;
+  revenue_usd: string;
+  period: string;
+  top_pages: Array<{ url: string; count: number; revenue_usd: string }>;
+  top_agents: Array<{ wallet: string; count: number; total_usd: string }>;
+}
+
+export interface PayoutUpdateResponse {
+  confirmed: boolean;
+  effective_at: string;
 }
 
 // --- Token Cache ---
