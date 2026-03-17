@@ -24,7 +24,7 @@ def mock_gate():
         network="base",
         asset="USDC",
         protocol="x402",
-        verify_url="https://xenarch.bot/v1/gates/550e8400-e29b-41d4-a716-446655440001",
+        verify_url="https://xenarch.dev/v1/gates/550e8400-e29b-41d4-a716-446655440001",
         expires="2026-03-16T00:00:00Z",
     )
 

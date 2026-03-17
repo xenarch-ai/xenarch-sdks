@@ -21,7 +21,7 @@ def require_payment(
     site_token: str,
     site_id: str,
     access_token_secret: str,
-    api_base: str = "https://xenarch.bot",
+    api_base: str = "https://xenarch.dev",
 ) -> Callable:
     """Decorator that gates a FastAPI route behind Xenarch payment.
 

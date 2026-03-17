@@ -54,13 +54,13 @@ describe("readConfig", () => {
 
 describe("writeConfig", () => {
   it("writes config file with correct content", async () => {
-    const config = { ...DEFAULT_CONFIG, api_base: "https://test.xenarch.bot" };
+    const config = { ...DEFAULT_CONFIG, api_base: "https://test.xenarch.dev" };
     await writeConfig(config, tmpDir);
 
     const filePath = join(tmpDir, "config.json");
     const raw = await readFile(filePath, "utf-8");
     const parsed = JSON.parse(raw);
-    expect(parsed.api_base).toBe("https://test.xenarch.bot");
+    expect(parsed.api_base).toBe("https://test.xenarch.dev");
   });
 
   it("sets restrictive file permissions", async () => {

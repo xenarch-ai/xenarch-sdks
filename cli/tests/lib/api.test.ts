@@ -56,7 +56,7 @@ describe("verifyPayment", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(verifyResp));
 
     const result = await verifyPayment(
-      "https://xenarch.bot/v1/gates/gate_1/verify",
+      "https://xenarch.dev/v1/gates/gate_1/verify",
       "0x" + "ab".repeat(32),
     );
     expect(result.access_token).toBe(verifyResp.access_token);
@@ -75,7 +75,7 @@ describe("verifyPayment", () => {
     );
 
     await expect(
-      verifyPayment("https://xenarch.bot/v1/gates/gate_1/verify", "0x" + "00".repeat(32)),
+      verifyPayment("https://xenarch.dev/v1/gates/gate_1/verify", "0x" + "00".repeat(32)),
     ).rejects.toThrow("Payment verification failed");
   });
 });
@@ -85,7 +85,7 @@ describe("getGateStatus", () => {
     const statusResp = mockGateStatusResponse({ status: "paid" });
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(statusResp));
 
-    const result = await getGateStatus("https://xenarch.bot", "gate_1");
+    const result = await getGateStatus("https://xenarch.dev", "gate_1");
     expect(result.status).toBe("paid");
   });
 });

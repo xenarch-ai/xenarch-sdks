@@ -26,7 +26,7 @@ describe("stats command logic", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(stats));
 
     const result = await getSiteStats(
-      "https://xenarch.bot",
+      "https://xenarch.dev",
       "xn_test_key",
       "site_001",
     );
@@ -42,7 +42,7 @@ describe("stats command logic", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(stats));
 
     const result = await getSiteStats(
-      "https://xenarch.bot",
+      "https://xenarch.dev",
       "xn_test_key",
       "site_001",
     );
@@ -55,10 +55,10 @@ describe("stats command logic", () => {
     const stats = mockSiteStatsResponse();
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(stats));
 
-    await getSiteStats("https://xenarch.bot", "xn_test_key", "site_abc123");
+    await getSiteStats("https://xenarch.dev", "xn_test_key", "site_abc123");
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "https://xenarch.bot/v1/sites/site_abc123/stats",
+      "https://xenarch.dev/v1/sites/site_abc123/stats",
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer xn_test_key",
@@ -71,7 +71,7 @@ describe("stats command logic", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock401Response());
 
     await expect(
-      getSiteStats("https://xenarch.bot", "bad_key", "site_001"),
+      getSiteStats("https://xenarch.dev", "bad_key", "site_001"),
     ).rejects.toThrow("Failed to get stats");
   });
 
@@ -84,7 +84,7 @@ describe("stats command logic", () => {
     );
 
     await expect(
-      getSiteStats("https://xenarch.bot", "xn_test_key", "nonexistent"),
+      getSiteStats("https://xenarch.dev", "xn_test_key", "nonexistent"),
     ).rejects.toThrow("Failed to get stats");
   });
 });
