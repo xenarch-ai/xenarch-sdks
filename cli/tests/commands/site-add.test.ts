@@ -26,7 +26,7 @@ describe("site add command logic", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock201Response(mockResp));
 
     const result = await createSite(
-      "https://xenarch.bot",
+      "https://xenarch.dev",
       "xn_test_key",
       "myblog.com",
     );
@@ -38,10 +38,10 @@ describe("site add command logic", () => {
     const mockResp = mockSiteCreateResponse();
     vi.mocked(globalThis.fetch).mockResolvedValue(mock201Response(mockResp));
 
-    await createSite("https://xenarch.bot", "xn_test_key", "myblog.com");
+    await createSite("https://xenarch.dev", "xn_test_key", "myblog.com");
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "https://xenarch.bot/v1/sites",
+      "https://xenarch.dev/v1/sites",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -58,7 +58,7 @@ describe("site add command logic", () => {
     );
 
     await expect(
-      createSite("https://xenarch.bot", "xn_test_key", "existing.com"),
+      createSite("https://xenarch.dev", "xn_test_key", "existing.com"),
     ).rejects.toThrow("Failed to add site");
   });
 
@@ -66,7 +66,7 @@ describe("site add command logic", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock401Response());
 
     await expect(
-      createSite("https://xenarch.bot", "bad_key", "myblog.com"),
+      createSite("https://xenarch.dev", "bad_key", "myblog.com"),
     ).rejects.toThrow("Failed to add site");
   });
 });

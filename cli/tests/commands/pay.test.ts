@@ -61,7 +61,7 @@ describe("pay command logic", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(verifyResp));
 
     const result = await verifyPayment(
-      "https://xenarch.bot/v1/gates/gate_1/verify",
+      "https://xenarch.dev/v1/gates/gate_1/verify",
       "0x" + "ab".repeat(32),
     );
     expect(result.access_token).toBe(verifyResp.access_token);

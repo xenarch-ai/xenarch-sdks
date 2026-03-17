@@ -12,7 +12,7 @@ cli/      — Command-line tools
 
 ## Design Principle
 
-All packages are thin HTTP clients to the xenarch.bot API. No business logic — just typed wrappers around REST endpoints.
+All packages are thin HTTP clients to the xenarch.dev API. No business logic — just typed wrappers around REST endpoints.
 
 **Keep SDKs in sync when the platform API changes.**
 

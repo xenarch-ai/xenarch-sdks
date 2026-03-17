@@ -78,7 +78,7 @@ def test_app():
         site_token=SITE_TOKEN,
         site_id=SITE_ID,
         access_token_secret=ACCESS_TOKEN_SECRET,
-        api_base="https://xenarch.bot",
+        api_base="https://xenarch.dev",
         excluded_paths={"/health"},
     )
     return app

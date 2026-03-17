@@ -22,7 +22,7 @@ export function mockGateResponse(
     network: "base",
     asset: "USDC",
     protocol: "x402",
-    verify_url: "https://xenarch.bot/v1/gates/gate_7f3a0001/verify",
+    verify_url: "https://xenarch.dev/v1/gates/gate_7f3a0001/verify",
     expires: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     ...overrides,
   };

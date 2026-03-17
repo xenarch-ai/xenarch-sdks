@@ -25,7 +25,7 @@ describe("payout set command logic", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(mockResp));
 
     const result = await updatePayout(
-      "https://xenarch.bot",
+      "https://xenarch.dev",
       "xn_test_key",
       "0x" + "ab".repeat(20),
       "password123",
@@ -40,7 +40,7 @@ describe("payout set command logic", () => {
 
     const wallet = "0x" + "cd".repeat(20);
     await updatePayout(
-      "https://xenarch.bot",
+      "https://xenarch.dev",
       "xn_test_key",
       wallet,
       "mypassword",
@@ -48,7 +48,7 @@ describe("payout set command logic", () => {
     );
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "https://xenarch.bot/v1/publishers/me/payout",
+      "https://xenarch.dev/v1/publishers/me/payout",
       expect.objectContaining({
         method: "PUT",
         headers: expect.objectContaining({
@@ -65,7 +65,7 @@ describe("payout set command logic", () => {
 
     await expect(
       updatePayout(
-        "https://xenarch.bot",
+        "https://xenarch.dev",
         "bad_key",
         "0x" + "ab".repeat(20),
         "password123",
@@ -83,7 +83,7 @@ describe("payout set command logic", () => {
 
     await expect(
       updatePayout(
-        "https://xenarch.bot",
+        "https://xenarch.dev",
         "xn_test_key",
         "0x" + "ab".repeat(20),
         "wrongpass",
@@ -96,7 +96,7 @@ describe("payout set command logic", () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(mockResp));
 
     await updatePayout(
-      "https://xenarch.bot",
+      "https://xenarch.dev",
       "xn_test_key",
       "0x" + "ab".repeat(20),
       "password123",
