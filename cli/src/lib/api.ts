@@ -12,6 +12,15 @@ import type {
   PayoutUpdateResponse,
 } from "../types.js";
 
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    return body.detail ?? body.message ?? res.statusText;
+  } catch {
+    return res.statusText;
+  }
+}
+
 export interface FetchGateResult {
   gated: boolean;
   gate: GateResponse | null;
@@ -48,8 +57,7 @@ export async function verifyPayment(
   });
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Payment verification failed: ${err.message} (${err.error})`);
+    throw new Error(`Payment verification failed: ${await errorMessage(res)}`);
   }
 
   return (await res.json()) as GateVerifyResponse;
@@ -62,8 +70,7 @@ export async function getGateStatus(
   const res = await fetch(`${apiBase}/v1/gates/${gateId}`);
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Failed to get gate status: ${err.message}`);
+    throw new Error(`Failed to get gate status: ${await errorMessage(res)}`);
   }
 
   return (await res.json()) as GateStatusResponse;
@@ -84,8 +91,7 @@ export async function registerAgent(
   });
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Agent registration failed: ${err.message}`);
+    throw new Error(`Agent registration failed: ${await errorMessage(res)}`);
   }
 
   return (await res.json()) as AgentRegisterResponse;
@@ -121,8 +127,7 @@ export async function registerPublisher(
   });
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Registration failed: ${err.message}`);
+    throw new Error(`Registration failed: ${await errorMessage(res)}`);
   }
 
   return (await res.json()) as PublisherRegisterResponse;
@@ -143,8 +148,7 @@ export async function createSite(
   });
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Failed to add site: ${err.message}`);
+    throw new Error(`Failed to add site: ${await errorMessage(res)}`);
   }
 
   return (await res.json()) as SiteCreateResponse;
@@ -159,8 +163,7 @@ export async function listSites(
   });
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Failed to list sites: ${err.message}`);
+    throw new Error(`Failed to list sites: ${await errorMessage(res)}`);
   }
 
   return (await res.json()) as SiteListItem[];
@@ -176,8 +179,7 @@ export async function getSiteStats(
   });
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Failed to get stats: ${err.message}`);
+    throw new Error(`Failed to get stats: ${await errorMessage(res)}`);
   }
 
   return (await res.json()) as SiteStatsResponse;
@@ -195,8 +197,7 @@ export async function loginPublisher(
   });
 
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.detail ?? err.message ?? res.statusText);
+    throw new Error(await errorMessage(res));
   }
 
   return (await res.json()) as { api_key: string };
@@ -220,8 +221,7 @@ export async function updatePayout(
   });
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Failed to update payout: ${err.message}`);
+    throw new Error(`Failed to update payout: ${await errorMessage(res)}`);
   }
 
   return (await res.json()) as PayoutUpdateResponse;
