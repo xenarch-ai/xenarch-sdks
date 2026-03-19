@@ -1,6 +1,6 @@
 {
-  "name": "xenarch-cli",
-  "version": "0.1.0",
+  "name": "xenarch",
+  "version": "0.1.1",
   "type": "module",
   "description": "CLI for interacting with the Xenarch payment network",
   "bin": {

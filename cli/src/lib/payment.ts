@@ -32,14 +32,14 @@ export async function executePayment(
     );
   }
 
-  // 3. Check and set allowance — exact approval per-transaction for security
+  // 3. Check and set allowance — approve max to avoid repeated approvals
   const allowance = (await usdc.allowance(
     wallet.address,
     gate.splitter,
   )) as bigint;
   if (allowance < amount) {
-    const approveTx = await usdc.approve(gate.splitter, amount);
-    await approveTx.wait(1);
+    const approveTx = await usdc.approve(gate.splitter, ethers.MaxUint256);
+    await approveTx.wait(2); // wait 2 blocks to ensure RPC state is updated
   }
 
   // 4. Call split

@@ -183,6 +183,25 @@ export async function getSiteStats(
   return (await res.json()) as SiteStatsResponse;
 }
 
+export async function loginPublisher(
+  apiBase: string,
+  email: string,
+  password: string,
+): Promise<{ api_key: string }> {
+  const res = await fetch(`${apiBase}/v1/publishers/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    const err = (await res.json()) as ApiError;
+    throw new Error(`Login failed: ${err.message}`);
+  }
+
+  return (await res.json()) as { api_key: string };
+}
+
 export async function updatePayout(
   apiBase: string,
   authToken: string,
