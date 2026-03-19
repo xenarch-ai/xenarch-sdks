@@ -3,6 +3,7 @@ import { registerWalletCommands } from "./commands/wallet.js";
 import { registerCheckCommand } from "./commands/check.js";
 import { registerPayCommand } from "./commands/pay.js";
 import { registerHistoryCommand } from "./commands/history.js";
+import { registerLoginCommand } from "./commands/login.js";
 import { registerRegisterCommand } from "./commands/register.js";
 import { registerSiteAddCommand } from "./commands/site-add.js";
 import { registerSitesCommand } from "./commands/sites.js";
@@ -27,6 +28,7 @@ export function createProgram(): Command {
   registerHistoryCommand(program);
 
   // Publisher commands
+  registerLoginCommand(program);
   registerRegisterCommand(program);
   registerSiteAddCommand(program);
   registerSitesCommand(program);
