@@ -195,8 +195,8 @@ export async function loginPublisher(
   });
 
   if (!res.ok) {
-    const err = (await res.json()) as ApiError;
-    throw new Error(`Login failed: ${err.message}`);
+    const err = await res.json();
+    throw new Error(err.detail ?? err.message ?? res.statusText);
   }
 
   return (await res.json()) as { api_key: string };
