@@ -28,7 +28,7 @@ export interface Config {
 
 export const DEFAULT_CONFIG: Config = {
   wallet: null,
-  api_base: "https://xenarch.dev",
+  api_base: "https://api.xenarch.dev",
   rpc_url: "https://mainnet.base.org",
   network: "base",
   auth_token: null,
