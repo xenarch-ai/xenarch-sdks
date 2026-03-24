@@ -12,6 +12,24 @@ import type {
   PayoutUpdateResponse,
 } from "../types.js";
 
+export interface PlatformConfig {
+  wc_project_id: string;
+}
+
+export async function fetchPlatformConfig(
+  apiBase: string,
+): Promise<PlatformConfig> {
+  const res = await fetch(`${apiBase}/v1/config`, {
+    headers: { "User-Agent": "xenarch-cli/0.1.0" },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch platform config: ${res.statusText}`);
+  }
+
+  return (await res.json()) as PlatformConfig;
+}
+
 async function errorMessage(res: Response): Promise<string> {
   try {
     const body = await res.json();

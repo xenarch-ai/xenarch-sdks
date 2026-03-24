@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { readConfig, writeConfig } from "./config.js";
-import type { WalletConfig } from "../types.js";
+import { restoreWalletConnectSigner } from "./signer.js";
+import type { WalletConfig, LocalWalletConfig } from "../types.js";
 
 export interface GeneratedWallet {
   address: string;
@@ -34,6 +35,7 @@ export async function saveWallet(
 ): Promise<void> {
   const config = await readConfig(configDir);
   config.wallet = {
+    type: "local",
     address: walletData.address,
     private_key: walletData.privateKey,
   };
@@ -44,7 +46,12 @@ export async function loadWallet(configDir?: string): Promise<ethers.Wallet> {
   const config = await readConfig(configDir);
   if (!config.wallet) {
     throw new Error(
-      "No wallet configured. Run `xenarch wallet generate` or `xenarch wallet import` first.",
+      "No wallet configured. Run `xenarch wallet generate`, `xenarch wallet import`, or `xenarch wallet connect` first.",
+    );
+  }
+  if (config.wallet.type === "walletconnect") {
+    throw new Error(
+      "Current wallet is WalletConnect — local signing not available. Use `xenarch pay` which handles WalletConnect automatically.",
     );
   }
   return new ethers.Wallet(config.wallet.private_key);
@@ -55,4 +62,29 @@ export async function getWalletConfig(
 ): Promise<WalletConfig | null> {
   const config = await readConfig(configDir);
   return config.wallet;
+}
+
+/**
+ * Load an ethers Signer for the configured wallet.
+ * - Local wallet: returns ethers.Wallet connected to provider
+ * - WalletConnect: restores the WC session and returns a WalletConnectSigner
+ */
+export async function loadSigner(
+  rpcUrl: string,
+  configDir?: string,
+): Promise<ethers.Signer> {
+  const config = await readConfig(configDir);
+  if (!config.wallet) {
+    throw new Error(
+      "No wallet configured. Run `xenarch wallet generate`, `xenarch wallet import`, or `xenarch wallet connect` first.",
+    );
+  }
+
+  if (config.wallet.type === "local") {
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    return new ethers.Wallet(config.wallet.private_key, provider);
+  }
+
+  // WalletConnect
+  return restoreWalletConnectSigner(config, rpcUrl);
 }

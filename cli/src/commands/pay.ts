@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { readConfig } from "../lib/config.js";
-import { loadWallet } from "../lib/wallet.js";
+import { loadSigner } from "../lib/wallet.js";
 import { fetchGate, verifyPayment } from "../lib/api.js";
 import { executePayment } from "../lib/payment.js";
 import { loadCache, cacheToken, getValidToken } from "../lib/token-cache.js";
@@ -55,11 +55,12 @@ Use with: curl -H "Authorization: Bearer ${cached.access_token}" ${url}`);
           return;
         }
 
-        // Load config and wallet
+        // Load config and signer
         const config = await readConfig();
         const rpcUrl = globals.rpcUrl ?? config.rpc_url;
 
-        const wallet = await loadWallet();
+        const signer = await loadSigner(rpcUrl);
+        const signerAddress = await signer.getAddress();
 
         // Fetch gate
         const result = await fetchGate(url);
@@ -98,7 +99,7 @@ Use with: curl -H "Authorization: Bearer ${cached.access_token}" ${url}`);
   ${bold("Splitter:")}   ${gate.splitter}
   ${bold("Collector:")}  ${gate.collector}
   ${bold("Network:")}    ${gate.network}
-  ${bold("Wallet:")}     ${wallet.address}
+  ${bold("Wallet:")}     ${signerAddress}
 
 No transaction sent.`);
           return;
@@ -107,7 +108,7 @@ No transaction sent.`);
         // Execute payment
         console.log(`Paying $${gate.price_usd} ${gate.asset} for ${url}\n`);
 
-        const paymentResult = await executePayment(gate, wallet, rpcUrl);
+        const paymentResult = await executePayment(gate, signer);
 
         console.log(`  ${bold("Transaction:")}  ${paymentResult.txHash}`);
         console.log(

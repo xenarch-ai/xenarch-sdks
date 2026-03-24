@@ -2,10 +2,20 @@
 
 // --- Config ---
 
-export interface WalletConfig {
+export interface LocalWalletConfig {
+  type: "local";
   address: string;
   private_key: string;
 }
+
+export interface WalletConnectConfig {
+  type: "walletconnect";
+  address: string;
+  session_topic: string;
+  relay_url: string;
+}
+
+export type WalletConfig = LocalWalletConfig | WalletConnectConfig;
 
 export interface Config {
   wallet: WalletConfig | null;
@@ -13,6 +23,7 @@ export interface Config {
   rpc_url: string;
   network: string;
   auth_token: string | null;
+  wc_project_id: string | null;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -21,6 +32,7 @@ export const DEFAULT_CONFIG: Config = {
   rpc_url: "https://mainnet.base.org",
   network: "base",
   auth_token: null,
+  wc_project_id: null,
 };
 
 // --- API Responses ---

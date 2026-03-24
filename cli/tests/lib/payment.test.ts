@@ -12,6 +12,8 @@ vi.mock("ethers", async () => {
     blockNumber: 12345678,
   });
 
+  const mockGetBalance = vi.fn().mockResolvedValue(1_000_000_000_000_000n); // 0.001 ETH
+
   const mockContract = vi.fn().mockImplementation(() => ({
     balanceOf: vi.fn().mockResolvedValue(10_000_000n), // 10 USDC
     allowance: vi.fn().mockResolvedValue(0n),
@@ -19,15 +21,14 @@ vi.mock("ethers", async () => {
     split: vi.fn().mockResolvedValue({ wait: mockWait }),
   }));
 
-  const mockProvider = vi.fn().mockImplementation(() => ({
-    getBalance: vi.fn().mockResolvedValue(1_000_000_000_000_000n), // 0.001 ETH
-  }));
+  const mockProvider = {
+    getBalance: mockGetBalance,
+  };
 
   return {
     ...actual,
     ethers: {
       ...actual.ethers,
-      JsonRpcProvider: mockProvider,
       Contract: mockContract,
       parseUnits: actual.ethers.parseUnits,
       formatUnits: actual.ethers.formatUnits,
@@ -36,12 +37,26 @@ vi.mock("ethers", async () => {
   };
 });
 
+// Helper: create a signer with a mock provider that has getBalance
+function createMockSigner() {
+  const wallet = ethers.Wallet.createRandom();
+  // Attach a mock provider with getBalance
+  const mockProvider = {
+    getBalance: vi.fn().mockResolvedValue(1_000_000_000_000_000n),
+  };
+  return {
+    getAddress: () => Promise.resolve(wallet.address),
+    provider: mockProvider,
+    // The signer is passed to Contract constructors — mocked, so shape doesn't matter
+  } as unknown as ethers.Signer;
+}
+
 describe("executePayment", () => {
   it("executes full payment flow (approve + split)", async () => {
     const gate = mockGateResponse({ price_usd: "0.0030" });
-    const wallet = ethers.Wallet.createRandom();
+    const signer = createMockSigner();
 
-    const result = await executePayment(gate, wallet, "https://mainnet.base.org");
+    const result = await executePayment(gate, signer);
 
     expect(result.txHash).toBe("0x" + "cc".repeat(32));
     expect(result.blockNumber).toBe(12345678);
@@ -61,10 +76,10 @@ describe("executePayment", () => {
     );
 
     const gate = mockGateResponse({ price_usd: "1.0000" });
-    const wallet = ethers.Wallet.createRandom();
+    const signer = createMockSigner();
 
     await expect(
-      executePayment(gate, wallet, "https://mainnet.base.org"),
+      executePayment(gate, signer),
     ).rejects.toThrow("Insufficient USDC");
   });
 });
