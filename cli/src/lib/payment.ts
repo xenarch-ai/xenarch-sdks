@@ -4,11 +4,10 @@ import { USDC_BASE, USDC_ABI, SPLITTER_ABI } from "../types.js";
 
 export async function executePayment(
   gate: GateResponse,
-  wallet: ethers.Wallet,
-  rpcUrl: string,
+  signer: ethers.Signer,
 ): Promise<PaymentResult> {
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const signer = wallet.connect(provider);
+  const address = await signer.getAddress();
+  const provider = signer.provider!;
 
   const usdc = new ethers.Contract(USDC_BASE, USDC_ABI, signer);
   const splitter = new ethers.Contract(gate.splitter, SPLITTER_ABI, signer);
@@ -17,7 +16,7 @@ export async function executePayment(
   const amount = ethers.parseUnits(gate.price_usd, 6);
 
   // 1. Check balance
-  const balance = (await usdc.balanceOf(wallet.address)) as bigint;
+  const balance = (await usdc.balanceOf(address)) as bigint;
   if (balance < amount) {
     throw new Error(
       `Insufficient USDC. Have ${ethers.formatUnits(balance, 6)}, need ${gate.price_usd}`,
@@ -25,7 +24,7 @@ export async function executePayment(
   }
 
   // 2. Check ETH for gas
-  const ethBalance = await provider.getBalance(wallet.address);
+  const ethBalance = await provider.getBalance(address);
   if (ethBalance === 0n) {
     throw new Error(
       "No ETH for gas. Send some ETH (Base) to your wallet to cover transaction fees.",
@@ -34,7 +33,7 @@ export async function executePayment(
 
   // 3. Check and set allowance — approve max to avoid repeated approvals
   const allowance = (await usdc.allowance(
-    wallet.address,
+    address,
     gate.splitter,
   )) as bigint;
   if (allowance < amount) {

@@ -19,7 +19,12 @@ export async function readConfig(configDir?: string): Promise<Config> {
   const filePath = join(dir, "config.json");
   try {
     const raw = await readFile(filePath, "utf-8");
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    const parsed = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    // Migrate legacy wallets without type field
+    if (parsed.wallet && !parsed.wallet.type) {
+      parsed.wallet = { ...parsed.wallet, type: "local" };
+    }
+    return parsed;
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return { ...DEFAULT_CONFIG };
