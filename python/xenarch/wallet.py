@@ -92,3 +92,26 @@ def generate_wallet() -> WalletConfig:
         api_base="https://api.xenarch.dev",
         network="base",
     )
+
+
+def load_wallet_or_create() -> WalletConfig:
+    """Load existing wallet or generate a new one on first use.
+
+    This is the zero-config entry point. If no wallet exists, one is
+    created automatically and saved to ~/.xenarch/wallet.json.
+    """
+    try:
+        return load_wallet()
+    except ValueError:
+        import sys
+
+        wallet = generate_wallet()
+        print(
+            f"Created new Xenarch wallet: {wallet.address}\n"
+            f"Saved to: {_WALLET_FILE}\n"
+            f"\n"
+            f"Fund this wallet with USDC on Base to start paying.\n"
+            f"You also need a small amount of ETH on Base for gas.",
+            file=sys.stderr,
+        )
+        return wallet

@@ -1,12 +1,39 @@
 [project]
 name = "xenarch"
 version = "0.1.0"
-description = "Python SDK for Xenarch — payment middleware for AI agents"
+description = "Python SDK for Xenarch — payment middleware for AI agents and publishers"
+readme = "README.md"
 requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Xenarch", email = "hello@xenarch.dev"},
+]
+keywords = [
+    "xenarch", "x402", "micropayments", "ai-agents", "usdc",
+    "base-blockchain", "mcp", "agent-payments", "http-402",
+    "pay-per-crawl", "machine-payments",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Office/Business :: Financial :: Point-Of-Sale",
+]
 dependencies = [
     "httpx>=0.27",
     "pydantic>=2.0",
 ]
+
+[project.urls]
+Homepage = "https://xenarch.dev"
+Repository = "https://github.com/xenarch-ai/xenarch-sdks"
+Documentation = "https://github.com/xenarch-ai/xenarch-sdks/tree/main/python"
+Issues = "https://github.com/xenarch-ai/xenarch-sdks/issues"
 
 [project.optional-dependencies]
 fastapi = ["fastapi>=0.100"]
@@ -14,6 +41,16 @@ agent = ["web3>=6.0", "eth-account>=0.11"]
 langchain = ["langchain-core>=0.2"]
 crewai = ["crewai>=0.50"]
 all = ["xenarch[fastapi,agent,langchain,crewai]"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+exclude = ["tests/", "uv.lock"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["xenarch"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
