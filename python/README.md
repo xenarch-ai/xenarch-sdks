@@ -124,6 +124,7 @@ No signup. No API keys. No custodial balances. Every payment is an on-chain USDC
 
 - [Xenarch](https://xenarch.dev)
 - [GitHub](https://github.com/xenarch-ai/xenarch-sdks)
+- [Examples](https://github.com/xenarch-ai/xenarch-examples) (working integration examples)
 - [MCP Server](https://github.com/xenarch-ai/xenarch-mcp) (for Claude Desktop, Cursor, etc.)
 - [Smart Contract](https://basescan.org/address/0x...) (verified, immutable, 0% fee)
 
