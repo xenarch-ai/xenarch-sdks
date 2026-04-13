@@ -44,6 +44,11 @@ def load_wallet() -> WalletConfig:
         with open(_CONFIG_FILE) as f:
             data = json.load(f)
             private_key = data.get("privateKey") or data.get("private_key")
+            # Also check nested wallet object
+            if not private_key:
+                wallet_data = data.get("wallet", {})
+                if isinstance(wallet_data, dict):
+                    private_key = wallet_data.get("privateKey") or wallet_data.get("private_key")
             rpc_url = data.get("rpcUrl", data.get("rpc_url", rpc_url))
             api_base = data.get("apiBase", data.get("api_base", api_base))
             network = data.get("network", network)
