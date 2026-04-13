@@ -58,7 +58,7 @@ class XenarchClient:
     def __init__(
         self,
         site_token: str,
-        api_base: str = "https://xenarch.dev",
+        api_base: str = "https://api.xenarch.dev",
         timeout: float = 10.0,
     ) -> None:
         self._site_token = site_token

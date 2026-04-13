@@ -28,7 +28,7 @@ class XenarchMiddleware:
         site_token: str,
         site_id: str,
         access_token_secret: str,
-        api_base: str = "https://xenarch.dev",
+        api_base: str = "https://api.xenarch.dev",
         excluded_paths: set[str] | None = None,
     ) -> None:
         self.app = app

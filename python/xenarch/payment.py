@@ -130,6 +130,6 @@ def execute_payment(
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
 
     return PaymentResult(
-        tx_hash=receipt["transactionHash"].hex(),
+        tx_hash="0x" + receipt["transactionHash"].hex(),
         block_number=receipt["blockNumber"],
     )
