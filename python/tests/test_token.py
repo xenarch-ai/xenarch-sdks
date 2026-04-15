@@ -29,7 +29,6 @@ class TestVerifyAccessToken:
     def test_tampered_signature(self):
         token = generate_test_token()
         parts = token.split(".")
-        # Flip a character in the signature
         tampered_sig = parts[1][:-1] + ("A" if parts[1][-1] != "A" else "B")
         tampered_token = f"{parts[0]}.{tampered_sig}"
         result = verify_access_token(tampered_token, SITE_ID, ACCESS_TOKEN_SECRET)
@@ -57,8 +56,6 @@ class TestVerifyAccessToken:
         assert result is None
 
     def test_cross_validates_with_platform_token_generation(self):
-        """Verify that tokens generated with the same logic as the platform
-        are correctly verified by the SDK."""
         token = generate_test_token(
             site_id=SITE_ID,
             secret=ACCESS_TOKEN_SECRET,
@@ -67,3 +64,64 @@ class TestVerifyAccessToken:
         result = verify_access_token(token, SITE_ID, ACCESS_TOKEN_SECRET)
         assert result is not None
         assert result["gate_id"] == "770e8400-e29b-41d4-a716-446655440002"
+
+    # --- gate_id scoping ---
+
+    def test_wrong_gate_id_rejected(self):
+        token = generate_test_token(gate_id="aaa00000-0000-0000-0000-000000000001")
+        result = verify_access_token(
+            token, SITE_ID, ACCESS_TOKEN_SECRET,
+            gate_id="bbb00000-0000-0000-0000-000000000002",
+        )
+        assert result is None
+
+    def test_correct_gate_id_accepted(self):
+        gid = "aaa00000-0000-0000-0000-000000000001"
+        token = generate_test_token(gate_id=gid)
+        result = verify_access_token(
+            token, SITE_ID, ACCESS_TOKEN_SECRET, gate_id=gid,
+        )
+        assert result is not None
+
+    # --- page scope ---
+
+    def test_page_scope_exact_url_accepted(self):
+        token = generate_test_token(url="/docs/intro", scope="page")
+        result = verify_access_token(
+            token, SITE_ID, ACCESS_TOKEN_SECRET, url="/docs/intro",
+        )
+        assert result is not None
+
+    def test_page_scope_wrong_url_rejected(self):
+        token = generate_test_token(url="/docs/intro", scope="page")
+        result = verify_access_token(
+            token, SITE_ID, ACCESS_TOKEN_SECRET, url="/docs/api",
+        )
+        assert result is None
+
+    # --- path scope ---
+
+    def test_path_scope_matching_url_accepted(self):
+        token = generate_test_token(
+            url="/docs/intro", scope="path", path_pattern="/docs/*",
+        )
+        result = verify_access_token(
+            token, SITE_ID, ACCESS_TOKEN_SECRET, url="/docs/api-reference",
+        )
+        assert result is not None
+
+    def test_path_scope_non_matching_url_rejected(self):
+        token = generate_test_token(
+            url="/docs/intro", scope="path", path_pattern="/docs/*",
+        )
+        result = verify_access_token(
+            token, SITE_ID, ACCESS_TOKEN_SECRET, url="/blog/post",
+        )
+        assert result is None
+
+    # --- url not checked when not provided ---
+
+    def test_url_not_checked_when_not_provided(self):
+        token = generate_test_token(url="/specific-page", scope="page")
+        result = verify_access_token(token, SITE_ID, ACCESS_TOKEN_SECRET)
+        assert result is not None

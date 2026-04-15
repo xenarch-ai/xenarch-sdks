@@ -63,7 +63,7 @@ class XenarchMiddleware:
         if auth_value.startswith("Bearer "):
             token = auth_value[7:]
             payload = verify_access_token(
-                token, self.site_id, self.access_token_secret
+                token, self.site_id, self.access_token_secret, url=path
             )
             if payload is not None:
                 await self.app(scope, receive, send)
