@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timezone
+from fnmatch import fnmatch
 
 
 def _b64url_decode(s: str) -> bytes:
@@ -18,7 +19,14 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s)
 
 
-def verify_access_token(token: str, site_id: str, secret: str) -> dict | None:
+def verify_access_token(
+    token: str,
+    site_id: str,
+    secret: str,
+    *,
+    gate_id: str | None = None,
+    url: str | None = None,
+) -> dict | None:
     """Verify an HMAC-SHA256 access token.
 
     Returns the payload dict if valid, None otherwise.
@@ -53,5 +61,22 @@ def verify_access_token(token: str, site_id: str, secret: str) -> dict | None:
 
     if payload.get("site_id") != site_id:
         return None
+
+    # Check gate_id if provided
+    if gate_id is not None and payload.get("gate_id") != gate_id:
+        return None
+
+    # Check URL scope if provided
+    if url is not None:
+        scope = payload.get("scope", "page")
+        if scope == "page":
+            if payload.get("url") != url:
+                return None
+        elif scope == "path":
+            token_pattern = payload.get("path_pattern")
+            if not token_pattern or not fnmatch(url, token_pattern):
+                return None
+        else:
+            return None
 
     return payload

@@ -58,7 +58,7 @@ class TestXenarchMiddleware:
 
     @pytest.mark.asyncio
     async def test_bot_with_valid_token_passes_through(self, async_client):
-        token = generate_test_token()
+        token = generate_test_token(url="/article")
         resp = await async_client.get(
             "/article",
             headers={
@@ -106,6 +106,66 @@ class TestXenarchMiddleware:
                 "/article",
                 headers={"user-agent": "GPTBot/1.0"},
             )
-            # Graceful degradation: pass through on API failure
             assert resp.status_code == 200
             assert resp.json() == {"content": "premium article"}
+
+    # --- Per-page scoping (XEN-115 fix) ---
+
+    @pytest.mark.asyncio
+    async def test_page_scoped_token_rejected_on_wrong_path(
+        self, async_client, mock_gate
+    ):
+        """A page-scoped token for /other-page is rejected when bot hits /article."""
+        token = generate_test_token(url="/other-page", scope="page")
+        with patch(
+            "xenarch.middleware.XenarchClient.create_gate",
+            new_callable=AsyncMock,
+            return_value=mock_gate,
+        ):
+            resp = await async_client.get(
+                "/article",
+                headers={
+                    "user-agent": "GPTBot/1.0",
+                    "authorization": f"Bearer {token}",
+                },
+            )
+            assert resp.status_code == 402
+
+    # --- Path scope ---
+
+    @pytest.mark.asyncio
+    async def test_path_scoped_token_accepted_on_matching_path(self, async_client):
+        """Path-scoped token for /article* matches /article."""
+        token = generate_test_token(
+            url="/article", scope="path", path_pattern="/article*",
+        )
+        resp = await async_client.get(
+            "/article",
+            headers={
+                "user-agent": "GPTBot/1.0",
+                "authorization": f"Bearer {token}",
+            },
+        )
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_path_scoped_token_rejected_on_non_matching_path(
+        self, async_client, mock_gate
+    ):
+        """Path-scoped token for /docs/* is rejected when hitting /article."""
+        token = generate_test_token(
+            url="/docs/intro", scope="path", path_pattern="/docs/*",
+        )
+        with patch(
+            "xenarch.middleware.XenarchClient.create_gate",
+            new_callable=AsyncMock,
+            return_value=mock_gate,
+        ):
+            resp = await async_client.get(
+                "/article",
+                headers={
+                    "user-agent": "GPTBot/1.0",
+                    "authorization": f"Bearer {token}",
+                },
+            )
+            assert resp.status_code == 402

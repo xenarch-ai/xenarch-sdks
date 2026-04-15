@@ -26,6 +26,9 @@ def generate_test_token(
     secret: str = ACCESS_TOKEN_SECRET,
     expired: bool = False,
     gate_id: str = "660e8400-e29b-41d4-a716-446655440001",
+    url: str = "/article",
+    scope: str = "page",
+    path_pattern: str | None = None,
 ) -> str:
     """Generate a valid HMAC-SHA256 access token for testing."""
     now = datetime.now(timezone.utc)
@@ -37,9 +40,13 @@ def generate_test_token(
     payload = {
         "gate_id": gate_id,
         "site_id": site_id,
+        "url": url,
+        "scope": scope,
         "iat": int(now.timestamp()),
         "exp": exp,
     }
+    if path_pattern is not None:
+        payload["path_pattern"] = path_pattern
 
     payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     signature = hmac.new(
