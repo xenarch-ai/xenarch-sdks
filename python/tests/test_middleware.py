@@ -4,12 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tests.conftest import (
-    ACCESS_TOKEN_SECRET,
-    SITE_ID,
-    SITE_TOKEN,
-    generate_test_token,
-)
+from tests.conftest import generate_test_token
 from xenarch.client import GateResponse
 
 
