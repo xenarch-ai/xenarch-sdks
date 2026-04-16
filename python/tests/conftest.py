@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timezone
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from xenarch.middleware import XenarchMiddleware

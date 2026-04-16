@@ -106,6 +106,6 @@ class TestXenarchClient:
     @pytest.mark.asyncio
     async def test_context_manager(self):
         with patch.object(httpx.AsyncClient, "aclose", new_callable=AsyncMock) as mock:
-            async with XenarchClient("token") as client:
+            async with XenarchClient("token"):
                 pass
             mock.assert_called_once()
