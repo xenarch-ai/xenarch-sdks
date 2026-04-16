@@ -1,6 +1,6 @@
 [project]
 name = "xenarch"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python SDK for Xenarch — x402 payment middleware for AI agents and publishers. FastAPI-native HTTP 402 pay-per-request with USDC micropayments on Base L2. Non-custodial, 0% fee. A pay-per-crawl alternative to Cloudflare."
 readme = "README.md"
 requires-python = ">=3.12"
