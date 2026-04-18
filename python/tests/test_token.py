@@ -27,9 +27,18 @@ class TestVerifyAccessToken:
         assert result is None
 
     def test_tampered_signature(self):
+        import base64
+
         token = generate_test_token()
         parts = token.split(".")
-        tampered_sig = parts[1][:-1] + ("A" if parts[1][-1] != "A" else "B")
+        sig_b64 = parts[1]
+        # Decode, flip a byte in the middle (guaranteed to change bytes,
+        # unlike swapping the last char which can collide on base64 padding bits),
+        # re-encode without padding to match the original format.
+        padded = sig_b64 + "=" * ((4 - len(sig_b64) % 4) % 4)
+        sig_bytes = bytearray(base64.urlsafe_b64decode(padded))
+        sig_bytes[len(sig_bytes) // 2] ^= 0xFF
+        tampered_sig = base64.urlsafe_b64encode(bytes(sig_bytes)).rstrip(b"=").decode("ascii")
         tampered_token = f"{parts[0]}.{tampered_sig}"
         result = verify_access_token(tampered_token, SITE_ID, ACCESS_TOKEN_SECRET)
         assert result is None
