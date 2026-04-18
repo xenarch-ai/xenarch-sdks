@@ -15,16 +15,17 @@ import json
 from crewai.tools import tool
 
 from ..agent_client import (
+    GateInfo,
     check_gate as _check_gate_api,
     check_gate_by_domain,
     get_payment_history,
     verify_payment,
 )
 from ..payment import execute_payment
-from ..wallet import load_wallet
+from ..wallet import WalletConfig, load_wallet
 
 
-def _resolve_gate(url: str):
+def _resolve_gate(url: str) -> tuple[GateInfo | None, WalletConfig]:
     wallet = load_wallet()
     if not url.startswith("http"):
         return check_gate_by_domain(wallet.api_base, url), wallet

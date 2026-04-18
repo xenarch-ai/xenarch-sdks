@@ -26,12 +26,13 @@ from __future__ import annotations
 import json
 import threading
 from decimal import Decimal
-from typing import Callable
+from typing import Any, Callable
 
 from langchain_core.tools import BaseTool
 from pydantic import Field, PrivateAttr
 
 from ..agent_client import (
+    GateInfo,
     check_gate,
     check_gate_by_domain,
     get_payment_history,
@@ -39,9 +40,10 @@ from ..agent_client import (
 )
 from ..payment import execute_payment
 from ..wallet import WalletConfig, load_wallet
+from ._budget import XenarchBudgetPolicy
 
 
-def _resolve_gate(url: str, wallet: WalletConfig):
+def _resolve_gate(url: str, wallet: WalletConfig) -> GateInfo | None:
     """Resolve a gate from a URL or domain."""
     if not url.startswith("http"):
         return check_gate_by_domain(wallet.api_base, url)
@@ -93,47 +95,46 @@ class PayTool(BaseTool):
     max_per_call: Decimal = Field(default=Decimal("0.10"))
     max_per_session: Decimal = Field(default=Decimal("5.00"))
     human_approval_above: Decimal | None = None
-    approval_callback: Callable[[dict], bool] | None = None
+    approval_callback: Callable[[dict[str, Any]], bool] | None = None
 
-    # Session state — resets when a new tool instance is created.
-    # Lock guards against TOCTOU when the same tool is shared across threads
-    # (e.g. concurrent agent runs in a server).
-    _session_spent: Decimal = PrivateAttr(default=Decimal("0"))
-    _spend_lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
+    # Internal policy instance. Shared primitive with XenarchPay (PR 5b+).
+    # Constructed in model_post_init so pydantic entry points that skip
+    # __init__ (model_copy, model_validate) still get a live policy.
+    # Caps captured here are a snapshot: mutating `tool.max_per_call` after
+    # construction does NOT re-arm the policy.
+    _policy: XenarchBudgetPolicy = PrivateAttr(default=None)  # type: ignore[assignment]
+
+    def model_post_init(self, __context: Any) -> None:
+        self._policy = XenarchBudgetPolicy(
+            max_per_call=self.max_per_call,
+            max_per_session=self.max_per_session,
+            human_approval_above=self.human_approval_above,
+            approval_callback=self.approval_callback,
+        )
 
     @property
     def session_spent(self) -> Decimal:
-        with self._spend_lock:
-            return self._session_spent
+        return self._policy.session_spent
 
-    def _check_budget(self, price: Decimal) -> dict | None:
-        """Return an error dict if the payment violates budget policy, else None.
+    # Back-compat shims for existing tests/callers that poked at the private
+    # state directly. New code should use `self._policy`.
+    @property
+    def _session_spent(self) -> Decimal:
+        return self._policy._session_spent
 
-        Caller must hold `_spend_lock` so the check-and-commit on
-        `_session_spent` is atomic.
-        """
-        if price > self.max_per_call:
-            return {
-                "error": "budget_exceeded",
-                "reason": "max_per_call",
-                "price_usd": str(price),
-                "limit_usd": str(self.max_per_call),
-            }
-        if self._session_spent + price > self.max_per_session:
-            return {
-                "error": "budget_exceeded",
-                "reason": "max_per_session",
-                "session_spent_usd": str(self._session_spent),
-                "price_usd": str(price),
-                "limit_usd": str(self.max_per_session),
-            }
-        return None
+    @_session_spent.setter
+    def _session_spent(self, value: Decimal) -> None:
+        self._policy._session_spent = value
+
+    @property
+    def _spend_lock(self) -> threading.RLock:
+        return self._policy.lock()
+
+    def _check_budget(self, price: Decimal) -> dict[str, Any] | None:
+        return self._policy.check(price)
 
     def _requires_approval(self, price: Decimal) -> bool:
-        return (
-            self.human_approval_above is not None
-            and price > self.human_approval_above
-        )
+        return self._policy.requires_approval(price)
 
     def _run(self, url: str) -> str:
         try:
@@ -147,36 +148,21 @@ class PayTool(BaseTool):
             # Hold the lock across check → approval → payment → spend-commit so
             # concurrent calls on the same tool can't both pass a cap check
             # when only one would fit.
-            with self._spend_lock:
-                budget_error = self._check_budget(price)
+            with self._policy.lock():
+                budget_error = self._policy.check(price)
                 if budget_error is not None:
                     return json.dumps(budget_error)
 
-                if self._requires_approval(price):
-                    if self.approval_callback is None:
-                        return json.dumps(
-                            {
-                                "error": "approval_required",
-                                "reason": "no_callback_configured",
-                                "price_usd": str(price),
-                                "threshold_usd": str(self.human_approval_above),
-                            }
-                        )
-                    plan = {
-                        "url": url,
-                        "price_usd": str(price),
-                        "collector": gate.collector,
-                        "splitter": gate.splitter,
-                        "gate_id": gate.gate_id,
-                    }
-                    if not self.approval_callback(plan):
-                        return json.dumps(
-                            {
-                                "status": "declined",
-                                "reason": "approval_callback_rejected",
-                                "price_usd": str(price),
-                            }
-                        )
+                plan = {
+                    "url": url,
+                    "price_usd": str(price),
+                    "collector": gate.collector,
+                    "splitter": gate.splitter,
+                    "gate_id": gate.gate_id,
+                }
+                approval_error = self._policy.request_approval(plan)
+                if approval_error is not None:
+                    return json.dumps(approval_error)
 
                 result = execute_payment(
                     wallet=wallet,
@@ -185,9 +171,12 @@ class PayTool(BaseTool):
                     price_usd=gate.price_usd,
                 )
 
-                verification = verify_payment(gate.verify_url, result.tx_hash)
+                # Commit the spend the moment USDC leaves the wallet. If
+                # verify_payment raises below, the session budget still
+                # reflects the real on-chain state — no silent budget drift.
+                self._policy.commit(price)
 
-                self._session_spent += price
+                verification = verify_payment(gate.verify_url, result.tx_hash)
 
             return json.dumps(
                 {
@@ -197,7 +186,7 @@ class PayTool(BaseTool):
                     "amount_usd": gate.price_usd,
                     "access_token": verification["access_token"],
                     "expires_at": verification["expires_at"],
-                    "session_spent_usd": str(self._session_spent),
+                    "session_spent_usd": str(self._policy.session_spent),
                 }
             )
         except Exception as e:
