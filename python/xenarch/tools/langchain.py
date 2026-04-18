@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import threading
 from decimal import Decimal
-from typing import Any, Callable
+from typing import Callable
 
 from langchain_core.tools import BaseTool
 from pydantic import Field, PrivateAttr
