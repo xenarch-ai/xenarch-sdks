@@ -42,7 +42,8 @@ fastapi = ["fastapi>=0.100"]
 agent = ["web3>=6.0", "eth-account>=0.11"]
 langchain = ["langchain-core>=0.2"]
 crewai = ["crewai>=0.50"]
-all = ["xenarch[fastapi,agent,langchain,crewai]"]
+x402 = ["x402>=2.8,<3", "eth-account>=0.11"]
+all = ["xenarch[fastapi,agent,langchain,crewai,x402]"]
 
 [build-system]
 requires = ["hatchling"]
@@ -78,4 +79,8 @@ dev = [
     "hypothesis>=6.100",
     "mypy>=1.11",
     "langchain>=0.2",
+    "web3>=6.0",
+    "eth-account>=0.11",
+    "crewai>=0.50",
+    "x402>=2.8,<3",
 ]

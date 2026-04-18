@@ -2119,6 +2119,15 @@ wheels = [
 ]
 
 [[package]]
+name = "nest-asyncio"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/f8/51569ac65d696c8ecbee95938f89d4abf00f47d58d48f6fbabfe8f0baefe/nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe", size = 7418, upload-time = "2024-01-21T14:25:19.227Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/c4/c2971a3ba4c6103a3d10c4b0f24f461ddc027f0f09763220cf35ca1401b3/nest_asyncio-1.6.0-py3-none-any.whl", hash = "sha256:87af6efd6b5e897c81050477ef65c62e2b2f35d51703cae01aff2905b1852e1c", size = 5195, upload-time = "2024-01-21T14:25:17.223Z" },
+]
+
+[[package]]
 name = "numpy"
 version = "2.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3913,6 +3922,20 @@ wheels = [
 ]
 
 [[package]]
+name = "x402"
+version = "2.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nest-asyncio" },
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1d/8b/06c7131204107a92e3cad0c06624a53b9f85b037706e5556c75760350a8e/x402-2.8.0.tar.gz", hash = "sha256:a39b39173b65581edbe221caeb76553d4cd8240da07099440cc009b9dcd86b7f", size = 1049266, upload-time = "2026-04-17T18:02:49.402Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d9/c2/c5c190bfe9e2b93e350cc3b950bd23c9ec41463e12f3dcb6f9380e473572/x402-2.8.0-py3-none-any.whl", hash = "sha256:0d33becdcc498bf4c7d16ea42bc45698888bb48ac5c7c1453ea53c4a56f8e666", size = 1121990, upload-time = "2026-04-17T18:02:47.43Z" },
+]
+
+[[package]]
 name = "xenarch"
 version = "0.1.2"
 source = { editable = "." }
@@ -3932,6 +3955,7 @@ all = [
     { name = "fastapi" },
     { name = "langchain-core" },
     { name = "web3" },
+    { name = "x402" },
 ]
 crewai = [
     { name = "crewai" },
@@ -3942,38 +3966,52 @@ fastapi = [
 langchain = [
     { name = "langchain-core" },
 ]
+x402 = [
+    { name = "eth-account" },
+    { name = "x402" },
+]
 
 [package.dev-dependencies]
 dev = [
+    { name = "crewai" },
+    { name = "eth-account" },
     { name = "fastapi" },
     { name = "hypothesis" },
     { name = "langchain" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "web3" },
+    { name = "x402" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "crewai", marker = "extra == 'crewai'", specifier = ">=0.50" },
     { name = "eth-account", marker = "extra == 'agent'", specifier = ">=0.11" },
+    { name = "eth-account", marker = "extra == 'x402'", specifier = ">=0.11" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.100" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=0.2" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "web3", marker = "extra == 'agent'", specifier = ">=6.0" },
-    { name = "xenarch", extras = ["fastapi", "agent", "langchain", "crewai"], marker = "extra == 'all'" },
+    { name = "x402", marker = "extra == 'x402'", specifier = ">=2.8,<3" },
+    { name = "xenarch", extras = ["fastapi", "agent", "langchain", "crewai", "x402"], marker = "extra == 'all'" },
 ]
-provides-extras = ["fastapi", "agent", "langchain", "crewai", "all"]
+provides-extras = ["fastapi", "agent", "langchain", "crewai", "x402", "all"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "crewai", specifier = ">=0.50" },
+    { name = "eth-account", specifier = ">=0.11" },
     { name = "fastapi", specifier = ">=0.100" },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "langchain", specifier = ">=0.2" },
     { name = "mypy", specifier = ">=1.11" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "web3", specifier = ">=6.0" },
+    { name = "x402", specifier = ">=2.8,<3" },
 ]
 
 [[package]]
