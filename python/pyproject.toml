@@ -42,7 +42,8 @@ fastapi = ["fastapi>=0.100"]
 agent = ["web3>=6.0", "eth-account>=0.11"]
 langchain = ["langchain-core>=0.2"]
 crewai = ["crewai>=0.50"]
-all = ["xenarch[fastapi,agent,langchain,crewai]"]
+x402 = ["x402>=2.8,<3", "eth-account>=0.11"]
+all = ["xenarch[fastapi,agent,langchain,crewai,x402]"]
 
 [build-system]
 requires = ["hatchling"]
@@ -56,6 +57,30 @@ packages = ["xenarch"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+    "contract: tests that hit a live HTTP endpoint (local platform or Coinbase reference). Skipped unless the endpoint is reachable.",
+    "property: hypothesis-powered property-based tests. Slower than unit tests.",
+]
+
+[tool.mypy]
+files = ["xenarch/tools"]
+strict = true
+ignore_missing_imports = false
+
+[[tool.mypy.overrides]]
+module = ["x402.*", "pay_json.*"]
+ignore_missing_imports = true
 
 [dependency-groups]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "fastapi>=0.100"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "fastapi>=0.100",
+    "hypothesis>=6.100",
+    "mypy>=1.11",
+    "langchain>=0.2",
+    "web3>=6.0",
+    "eth-account>=0.11",
+    "crewai>=0.50",
+    "x402>=2.8,<3",
+]
