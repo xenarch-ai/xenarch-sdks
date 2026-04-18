@@ -7,23 +7,26 @@ the payment path works against any spec-compliant x402 resource server.
 
 Flow per call:
 
-  1. GET the resource.
-  2. If the response is not 402, return the body (resource is free).
-  3. Parse the 402 body into ``PaymentRequired`` via the x402 SDK.
-  4. Select the first ``scheme=="exact"`` accept entry whose network matches
-     a scheme registered on the SDK client (the tool pre-registers the
-     EVM-exact scheme for EIP-3009 USDC).
-  5. Convert the atomic ``amount`` to a ``Decimal`` USD price using the
+  1. If ``discover_via_pay_json`` is on, fetch the host's pay.json and
+     match the URL path. If the rule advertises ``budget_hints`` that
+     exceed the caller's budget policy, refuse without hitting the URL
+     — saves a network round-trip on resources we could never afford.
+  2. GET the resource.
+  3. If the response is not 402, return the body (resource is free).
+  4. Parse the 402 body into ``PaymentRequired`` via the x402 SDK.
+  5. Select the first ``scheme=="exact"`` accept entry whose network
+     matches a scheme registered on the SDK client (the tool pre-registers
+     the EVM-exact scheme for EIP-3009 USDC).
+  6. Convert the atomic ``amount`` to a ``Decimal`` USD price using the
      asset's ``decimals`` (6 for USDC).
-  6. Under ``budget_policy.lock()``: budget check → optional approval →
+  7. Under ``budget_policy.lock()``: budget check → optional approval →
      ``create_payment_payload`` → retry the GET with ``X-PAYMENT`` → commit
      the session spend BEFORE post-payment work (so a later failure cannot
      silently re-open the budget).
-  7. Return a JSON string with the body and transaction metadata.
+  8. Return a JSON string with the body and transaction metadata.
 
-Receipt fetch + verification, pay.json pre-discovery, and the reputation gate
-are intentionally not implemented here — they ship in subsequent PRs on top
-of this scaffold.
+Receipt fetch + verification and the reputation gate are intentionally not
+implemented here — they ship in subsequent PRs on top of this scaffold.
 
 Usage::
 
@@ -44,10 +47,12 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from langchain_core.tools import BaseTool
@@ -137,6 +142,63 @@ def _truncate_body(text: str, limit: int) -> str:
     return text[:limit] + "…"
 
 
+def _split_host_path(url: str) -> tuple[str, str]:
+    """Split a URL into (host, path) for pay.json resolution.
+
+    Path falls back to ``"/"`` when empty so the rule matcher always has
+    something to glob against — ``match_rule("")`` is ill-defined.
+    """
+    parsed = urlparse(url)
+    host = parsed.netloc
+    path = parsed.path or "/"
+    return host, path
+
+
+def _budget_hint_exceeds(
+    rule_hints: dict[str, Any],
+    policy: XenarchBudgetPolicy,
+) -> dict[str, Any] | None:
+    """Return an error dict if rule-advertised caps exceed the local policy.
+
+    We compare on two knobs: per-call and per-session. The publisher's
+    hint is advisory (`recommended_max_per_call`), not authoritative —
+    we use it only to short-circuit hopeless fetches. When hints are
+    malformed or missing, treat as "no guidance" and fall through to the
+    live 402 price check.
+    """
+    per_call_hint = rule_hints.get("recommended_max_per_call")
+    per_session_hint = rule_hints.get("recommended_max_per_session")
+
+    def _as_decimal(raw: Any) -> Decimal | None:
+        if not isinstance(raw, str):
+            return None
+        try:
+            value = Decimal(raw)
+        except Exception:
+            return None
+        return value if value.is_finite() and value >= 0 else None
+
+    per_call = _as_decimal(per_call_hint)
+    if per_call is not None and per_call > policy.max_per_call:
+        return {
+            "error": "budget_hint_exceeded",
+            "reason": "recommended_max_per_call",
+            "hint_usd": str(per_call),
+            "limit_usd": str(policy.max_per_call),
+        }
+
+    per_session = _as_decimal(per_session_hint)
+    if per_session is not None and per_session > policy.max_per_session:
+        return {
+            "error": "budget_hint_exceeded",
+            "reason": "recommended_max_per_session",
+            "hint_usd": str(per_session),
+            "limit_usd": str(policy.max_per_session),
+        }
+
+    return None
+
+
 class XenarchPay(BaseTool):
     """Pay for x402-gated content. Vendor-neutral, LangChain-idiomatic."""
 
@@ -160,10 +222,19 @@ class XenarchPay(BaseTool):
     budget_policy: XenarchBudgetPolicy = Field(default_factory=XenarchBudgetPolicy)
 
     # --- Facilitator hooks (placeholder for PR 5d) ----------------------
-    # Stored but unused at this layer. Receipts, reputation, and pay.json
-    # land in later PRs — keeping the field here means callers can wire
-    # the URL once and pick up those features without a constructor change.
+    # Stored but unused at this layer. Receipts and reputation land in a
+    # later PR — keeping the field here means callers can wire the URL
+    # once and pick up those features without a constructor change.
     facilitator_url: str = Field(default="https://xenarch.dev")
+
+    # --- pay.json pre-discovery ----------------------------------------
+    # When on, the tool fetches `/.well-known/pay.json` on the target host
+    # before hitting the resource. If the matched rule's `budget_hints`
+    # exceed the budget policy's caps, the call refuses early. When off
+    # (or when the host serves no pay.json), we fall through to the 402
+    # path — pay.json is a hint, not a gate.
+    discover_via_pay_json: bool = Field(default=True)
+    pay_json_timeout: float = Field(default=5.0)
 
     # --- HTTP client ----------------------------------------------------
     http_timeout: float = Field(default=10.0)
@@ -197,6 +268,58 @@ class XenarchPay(BaseTool):
     # Shared pre/post logic — kept sync-only; the async path calls the
     # same helpers with an httpx.AsyncClient and awaits the async SDK.
     # -------------------------------------------------------------------
+
+    def _pay_json_pre_check(self, url: str) -> dict[str, Any] | None:
+        """Fetch pay.json for the URL's host; return an error dict to abort,
+        or ``None`` to continue to the 402 flow.
+
+        Three refusal cases bubble up:
+          - ``pay_json_invalid`` — document exists but is malformed. We
+            treat this as a hard stop rather than a fallthrough because a
+            broken pay.json usually means the publisher is misconfigured
+            and the live 402 is likely to be broken too.
+          - ``budget_hint_exceeded`` — advertised caps exceed the policy.
+          - ``pay_json_error`` — transport failure; logged for debugging
+            but we fall through to the live 402 on timeouts/connection
+            errors so a flaky pay.json endpoint doesn't disable payments.
+
+        The 404 case (``PayJsonNotFound``) is expected and silent: most
+        hosts do not yet serve pay.json. Fall straight through to 402.
+        """
+        if not self.discover_via_pay_json:
+            return None
+
+        # Import locally so callers who don't install the `[x402]` extra
+        # (and therefore don't have pay-json) never hit a hard import
+        # error at `xenarch.tools.x402_pay` module load.
+        from pay_json import PayJson, PayJsonInvalid, PayJsonNotFound
+
+        host, path = _split_host_path(url)
+        if not host:
+            # Malformed URL — let the live GET surface the real error
+            # rather than synthesizing one here.
+            return None
+
+        try:
+            doc = PayJson.fetch(host, timeout=self.pay_json_timeout)
+        except PayJsonNotFound:
+            return None
+        except PayJsonInvalid as exc:
+            return {
+                "error": "pay_json_invalid",
+                "host": host,
+                "details": str(exc),
+            }
+        except Exception:
+            # Transport errors, schema edge cases, etc. — fall through.
+            # The live 402 is the authoritative price source anyway.
+            return None
+
+        rule = doc.match_rule(path)
+        if rule is None or rule.budget_hints is None:
+            return None
+
+        return _budget_hint_exceeds(rule.budget_hints, self.budget_policy)
 
     def _parse_402(self, response: httpx.Response) -> PaymentRequired | None:
         """Return the parsed PaymentRequired (V2) or None if V1/invalid."""
@@ -264,6 +387,10 @@ class XenarchPay(BaseTool):
 
     def _run(self, url: str) -> str:
         try:
+            pre_check = self._pay_json_pre_check(url)
+            if pre_check is not None:
+                return json.dumps(pre_check)
+
             with httpx.Client(timeout=self.http_timeout) as client:
                 initial = client.get(url)
 
@@ -357,6 +484,13 @@ class XenarchPay(BaseTool):
 
     async def _arun(self, url: str) -> str:
         try:
+            # PayJson.fetch is sync. Run it off the event loop so agents
+            # with high-throughput async chains aren't blocked on a
+            # third-party host serving pay.json.
+            pre_check = await asyncio.to_thread(self._pay_json_pre_check, url)
+            if pre_check is not None:
+                return json.dumps(pre_check)
+
             async with httpx.AsyncClient(timeout=self.http_timeout) as client:
                 initial = await client.get(url)
 
