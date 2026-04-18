@@ -62,17 +62,21 @@ def _fresh_tool(
     *,
     budget: XenarchBudgetPolicy | None = None,
     transport: httpx.MockTransport | None = None,
+    discover_via_pay_json: bool = False,
 ) -> XenarchPay:
     """Build a XenarchPay with a throwaway key and (optionally) a mock transport.
 
     To inject an httpx.MockTransport, we monkeypatch `httpx.Client` at call
     time — see `_with_mock_transport` below. Keeping tool construction and
-    transport injection separate keeps tests readable.
+    transport injection separate keeps tests readable. Pay.json discovery
+    is off by default here so these 5b-era tests stay offline — the 5c
+    pay.json tests live in ``test_x402_pay_payjson.py``.
     """
     account = Account.create()
     return XenarchPay(
         private_key=account.key.hex(),
         budget_policy=budget or XenarchBudgetPolicy(),
+        discover_via_pay_json=discover_via_pay_json,
     )
 
 
