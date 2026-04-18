@@ -5,8 +5,6 @@ from __future__ import annotations
 import threading
 from decimal import Decimal
 
-import pytest
-
 from xenarch.tools import XenarchBudgetPolicy
 
 
