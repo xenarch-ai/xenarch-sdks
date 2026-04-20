@@ -51,7 +51,7 @@ from typing import Any
 
 import httpx
 from langchain_core.tools import BaseTool
-from pydantic import Field, PrivateAttr
+from pydantic import Field, PrivateAttr, ValidationError
 
 from ._budget import XenarchBudgetPolicy
 
@@ -202,7 +202,7 @@ class XenarchPay(BaseTool):
         """Return the parsed PaymentRequired (V2) or None if V1/invalid."""
         try:
             parsed = parse_payment_required(response.content)
-        except Exception:
+        except (ValueError, TypeError, ValidationError, json.JSONDecodeError):
             return None
         # Minimal 5b scope only handles V2. V1 is still widely deployed but
         # needs different scheme selection; defer to a later PR.
@@ -343,9 +343,13 @@ class XenarchPay(BaseTool):
                         url=url, response=paid, accept=accept, price=price
                     )
         except httpx.HTTPError as exc:
-            return json.dumps({"error": "http_error", "details": str(exc)})
+            return json.dumps(
+                {"error": "http_error", "kind": type(exc).__name__}
+            )
         except Exception as exc:  # noqa: BLE001 — tool contract is JSON-string
-            return json.dumps({"error": "unexpected_error", "details": str(exc)})
+            return json.dumps(
+                {"error": "unexpected_error", "kind": type(exc).__name__}
+            )
 
     # -------------------------------------------------------------------
     # Async entry point — real implementation, not `sync_to_async`.
@@ -425,6 +429,10 @@ class XenarchPay(BaseTool):
                         url=url, response=paid, accept=accept, price=price
                     )
         except httpx.HTTPError as exc:
-            return json.dumps({"error": "http_error", "details": str(exc)})
+            return json.dumps(
+                {"error": "http_error", "kind": type(exc).__name__}
+            )
         except Exception as exc:  # noqa: BLE001
-            return json.dumps({"error": "unexpected_error", "details": str(exc)})
+            return json.dumps(
+                {"error": "unexpected_error", "kind": type(exc).__name__}
+            )
