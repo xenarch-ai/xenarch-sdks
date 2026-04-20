@@ -325,6 +325,14 @@ class XenarchPay(BaseTool):
     # keys by constructing a fresh tool, and production callers can force
     # a refresh the same way.
     _facilitator_pubkey: Any = PrivateAttr(default=None)
+    # Guards the async fetch so N concurrent `_arun` calls on the same
+    # tool only trigger one `GET /.well-known/...key.pem` round-trip.
+    # Lazily created in `_verify_receipt_async` because `asyncio.Lock()`
+    # must be instantiated on the running loop (or at least while a loop
+    # exists) — constructing it in `model_post_init` would bind it to
+    # whichever loop happened to be running at tool-construction time,
+    # which may not be the loop the agent later runs on.
+    _pubkey_lock: Any = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
         # Import here so `eth_account` is only required when the tool is
@@ -525,13 +533,21 @@ class XenarchPay(BaseTool):
         from xenarch import _receipts
 
         if self._facilitator_pubkey is None:
-            try:
-                self._facilitator_pubkey = await _receipts.fetch_public_key_async(
-                    self._public_key_url(),
-                    timeout=self.receipts_timeout,
-                )
-            except (httpx.HTTPError, ValueError):
-                return False
+            if self._pubkey_lock is None:
+                self._pubkey_lock = asyncio.Lock()
+            async with self._pubkey_lock:
+                # Re-check under the lock — another coroutine may have
+                # populated the cache while we were waiting.
+                if self._facilitator_pubkey is None:
+                    try:
+                        self._facilitator_pubkey = (
+                            await _receipts.fetch_public_key_async(
+                                self._public_key_url(),
+                                timeout=self.receipts_timeout,
+                            )
+                        )
+                    except (httpx.HTTPError, ValueError):
+                        return False
         return _receipts.verify_signature(self._facilitator_pubkey, receipt)
 
     def _pay_json_pre_check(self, url: str) -> dict[str, Any] | None:

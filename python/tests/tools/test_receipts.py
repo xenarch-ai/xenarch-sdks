@@ -83,6 +83,38 @@ class TestCanonicalJsonGoldens:
         assert a == b
 
 
+class TestCanonicalJsonRejectsNonSpec:
+    """Non-spec inputs must raise, not silently produce bytes the
+    facilitator can't verify. Floats are the landmine: json.dumps happily
+    encodes NaN as ``NaN`` (not valid JSON) and rounds floats differently
+    than a Decimal-string round-trip."""
+
+    def test_float_rejected(self) -> None:
+        with pytest.raises(TypeError, match="float"):
+            canonical_json({"amount": 1.23})
+
+    def test_float_in_nested_list_rejected(self) -> None:
+        with pytest.raises(TypeError, match="float"):
+            canonical_json({"amounts": [1, 2.0, 3]})
+
+    def test_nan_rejected(self) -> None:
+        with pytest.raises(TypeError, match="float"):
+            canonical_json({"x": float("nan")})
+
+    def test_non_str_key_rejected(self) -> None:
+        with pytest.raises(TypeError, match="str keys"):
+            canonical_json({1: "bad"})  # type: ignore[dict-item]
+
+    def test_bytes_value_rejected(self) -> None:
+        with pytest.raises(TypeError, match="bytes"):
+            canonical_json({"sig": b"raw"})
+
+    def test_bool_and_none_allowed(self) -> None:
+        # Sanity: bool is a subclass of int but gets handled explicitly.
+        got = canonical_json({"ok": True, "none": None, "count": 0})
+        assert got == b'{"count":0,"none":null,"ok":true}'
+
+
 class TestVerifySignature:
     def test_fixture_receipt_verifies(self) -> None:
         pub_pem, _ = _load_keypair()

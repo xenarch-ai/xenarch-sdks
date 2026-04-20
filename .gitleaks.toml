@@ -1,0 +1,16 @@
+title = "gitleaks config for xenarch-sdks"
+
+# Inherit gitleaks' default rule set — we only want to add allowlisted paths,
+# not replace the shipped detectors.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+Test-only Ed25519 fixture used to drive receipt-verify tests. Generated
+fresh for the test suite and has never signed anything a real facilitator
+would accept; the matching README in the same directory documents this.
+"""
+paths = [
+  '''python/tests/tools/fixtures/receipts/xenarch_signed\.privkey\.pem$''',
+]

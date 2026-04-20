@@ -32,12 +32,59 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 
+_ALLOWED_SCALARS = (str, int, bool, type(None))
+
+
+def _assert_canonical_safe(value: Any) -> None:
+    """Walk ``value`` and reject anything the canonical form can't represent.
+
+    We deliberately don't accept ``float``. Python's ``json.dumps`` would
+    emit ``1.0`` where RFC 8785 wants ``1``, ``NaN``/``Infinity`` instead of
+    raising, and would round-trip differently on platforms with different
+    libc printf precision. Receipts must either carry integer amounts in
+    atomic units or decimal strings — both canonicalise deterministically.
+    """
+    if isinstance(value, bool) or value is None or isinstance(value, (str, int)):
+        return
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            if not isinstance(key, str):
+                raise TypeError(
+                    f"canonical JSON requires str keys, got {type(key).__name__}"
+                )
+            _assert_canonical_safe(inner)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _assert_canonical_safe(item)
+        return
+    if isinstance(value, float):
+        raise TypeError(
+            "canonical JSON rejects float values — use int atomic units or "
+            "Decimal string to keep signatures deterministic"
+        )
+    raise TypeError(
+        f"canonical JSON rejects {type(value).__name__} — supported types: "
+        "dict, list, str, int, bool, None"
+    )
+
+
 def canonical_json(data: dict[str, Any]) -> bytes:
     """Return the bytes the signer hashed over.
+
+    Subset of RFC 8785 used by the Xenarch facilitator — sorted keys,
+    compact separators, UTF-8, ``ensure_ascii=False``. Floats, ``NaN``,
+    ``Infinity``, and non-str dict keys raise ``TypeError`` rather than
+    silently producing output the platform can't verify.
+
+    Scope: signed receipts only. Do not use this as a generic JSON
+    canonicaliser — the rules above intentionally differ from RFC 8785
+    (no float canonicalisation at all, not just no lossy repr).
 
     >>> canonical_json({"b": 1, "a": 2})
     b'{"a":2,"b":1}'
     """
+    _assert_canonical_safe(data)
     return json.dumps(
         data,
         sort_keys=True,
