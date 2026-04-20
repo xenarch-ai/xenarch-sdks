@@ -45,7 +45,7 @@ crewai = ["crewai>=0.50"]
 x402 = [
     "x402>=2.8,<3",
     "eth-account>=0.11",
-    "pay-json>=1.1",
+    "pay.json>=1.1,<2",
 ]
 all = ["xenarch[fastapi,agent,langchain,crewai,x402]"]
 
@@ -75,13 +75,6 @@ ignore_missing_imports = false
 module = ["x402.*", "pay_json.*"]
 ignore_missing_imports = true
 
-[tool.uv.sources]
-# pay-json is a first-party package in the xenarch-ai org; it's not yet on
-# PyPI, so point uv at the git subdir for resolution. Once published (v1.1
-# tagged on PyPI), this block can be removed and `pay-json>=1.1` in the
-# x402 optional-dep will resolve from the index directly.
-pay-json = { git = "https://github.com/xenarch-ai/pay-json.git", subdirectory = "tools/python", rev = "main" }
-
 [dependency-groups]
 dev = [
     "pytest>=8.0",
@@ -94,5 +87,5 @@ dev = [
     "eth-account>=0.11",
     "crewai>=0.50",
     "x402>=2.8,<3",
-    "pay-json>=1.1",
+    "pay.json>=1.1,<2",
 ]

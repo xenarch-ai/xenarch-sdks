@@ -312,3 +312,24 @@ class TestDecimalsOverride:
         assert result["error"] == "budget_exceeded"
         assert result["reason"] == "max_per_call"
         assert result["price_usd"] == "1"  # Decimal repr of exactly 1
+
+
+class TestSSRFBlocks:
+    """Agent-provided URLs must not let the tool fetch private/internal hosts.
+    Without this check, a prompt-injection could exfiltrate cloud metadata
+    (169.254.169.254) or hit loopback services into the LLM's context."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://127.0.0.1/admin",
+            "http://localhost/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://10.0.0.5/internal",
+            "http://[::1]/",
+        ],
+    )
+    def test_private_hosts_refused(self, url: str):
+        tool = _fresh_tool()
+        result = json.loads(tool._run(url))
+        assert result["error"] == "unsafe_host"
