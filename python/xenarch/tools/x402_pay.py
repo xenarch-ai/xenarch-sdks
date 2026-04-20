@@ -49,7 +49,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import ipaddress
 import json
+import socket
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urlparse
@@ -145,13 +147,62 @@ def _truncate_body(text: str, limit: int) -> str:
 def _split_host_path(url: str) -> tuple[str, str]:
     """Split a URL into (host, path) for pay.json resolution.
 
-    Path falls back to ``"/"`` when empty so the rule matcher always has
-    something to glob against — ``match_rule("")`` is ill-defined.
+    Returns the host as ``hostname[:port]`` with any userinfo stripped,
+    so error echoes and pay.json fetches never leak credentials embedded
+    in a URL like ``https://user:pass@example.com/foo``. Path falls back
+    to ``"/"`` when empty so the rule matcher always has something to
+    glob against — ``match_rule("")`` is ill-defined.
     """
     parsed = urlparse(url)
-    host = parsed.netloc
+    hostname = parsed.hostname or ""
+    host = f"{hostname}:{parsed.port}" if parsed.port else hostname
     path = parsed.path or "/"
     return host, path
+
+
+def _is_public_host(host: str) -> bool:
+    """True iff ``host`` resolves only to globally-routable IP addresses.
+
+    Blocks SSRF to loopback, RFC1918 private ranges, link-local (including
+    AWS/GCP IMDS at 169.254.169.254), multicast, and reserved/unspecified
+    space. An agent-provided URL like ``http://169.254.169.254/latest``
+    would otherwise let a prompt-injection attack read cloud metadata into
+    the LLM's context.
+
+    Best-effort only: a TOCTOU window exists between this resolve and the
+    actual connect, and DNS rebinding can defeat it. Treat as defence-in-
+    depth on top of network-level egress rules.
+    """
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    if not infos:
+        return False
+    for _family, _type, _proto, _canon, sockaddr in infos:
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_unspecified
+            or ip.is_reserved
+        ):
+            return False
+    return True
+
+
+async def _is_public_host_async(host: str) -> bool:
+    """Async variant of ``_is_public_host`` that doesn't block the event loop."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _is_public_host, host)
 
 
 def _budget_hint_exceeds(
@@ -387,6 +438,12 @@ class XenarchPay(BaseTool):
 
     def _run(self, url: str) -> str:
         try:
+            hostname = urlparse(url).hostname or ""
+            if not _is_public_host(hostname):
+                return json.dumps(
+                    {"error": "unsafe_host", "host": hostname}
+                )
+
             pre_check = self._pay_json_pre_check(url)
             if pre_check is not None:
                 return json.dumps(pre_check)
@@ -484,6 +541,12 @@ class XenarchPay(BaseTool):
 
     async def _arun(self, url: str) -> str:
         try:
+            hostname = urlparse(url).hostname or ""
+            if not await _is_public_host_async(hostname):
+                return json.dumps(
+                    {"error": "unsafe_host", "host": hostname}
+                )
+
             # PayJson.fetch is sync. Run it off the event loop so agents
             # with high-throughput async chains aren't blocked on a
             # third-party host serving pay.json.
