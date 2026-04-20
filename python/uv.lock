@@ -3952,6 +3952,7 @@ name = "xenarch"
 version = "0.1.2"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "httpx" },
     { name = "pydantic" },
 ]
@@ -4003,6 +4004,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "crewai", marker = "extra == 'crewai'", specifier = ">=0.50" },
+    { name = "cryptography", specifier = ">=42" },
     { name = "eth-account", marker = "extra == 'agent'", specifier = ">=0.11" },
     { name = "eth-account", marker = "extra == 'x402'", specifier = ">=0.11" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.100" },

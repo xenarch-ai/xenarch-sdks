@@ -1,0 +1,10 @@
+{
+  "tx_hash": "0xabc123def4560000000000000000000000000000000000000000000000000000",
+  "amount_usd": "0.010000",
+  "resource": "https://example.com/article/42",
+  "paid_at": "2026-04-18T12:34:56Z",
+  "payer": "0x1111111111111111111111111111111111111111",
+  "receiver": "0x2222222222222222222222222222222222222222",
+  "facilitator": "xenarch.dev",
+  "signature": "tHioPzkFtd9sBdp/6jYuN7K7BXqsl0DxHiH/BaX3K8pQgsNaZUnFQ5l+uBSuXnZ6O1JMwt2huypkAhQYV6fZDg=="
+}
