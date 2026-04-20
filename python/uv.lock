@@ -2493,6 +2493,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pay-json"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/04/44/8b47af3c71fccee0c62dffc314b08ea9c949c5a85ed1a112ea63dce44a55/pay_json-1.1.0.tar.gz", hash = "sha256:8f963c5af30243314b67a532825c02e405427ac57a39adec49b35606c165c0a7", size = 14356, upload-time = "2026-04-20T02:36:11.046Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/23/6033370939f7d4acd0208e4e2dd3d45209611876b2a62246d3c2c7777ceb/pay_json-1.1.0-py3-none-any.whl", hash = "sha256:3a90d80026bcea6adf7da8cd971ddc1d9f92d084d3374da6294f9c31fcf17701", size = 4502, upload-time = "2026-04-20T02:36:12.686Z" },
+]
+
+[[package]]
 name = "pdfminer-six"
 version = "20251230"
 source = { registry = "https://pypi.org/simple" }
@@ -3954,6 +3966,7 @@ all = [
     { name = "eth-account" },
     { name = "fastapi" },
     { name = "langchain-core" },
+    { name = "pay-json" },
     { name = "web3" },
     { name = "x402" },
 ]
@@ -3968,6 +3981,7 @@ langchain = [
 ]
 x402 = [
     { name = "eth-account" },
+    { name = "pay-json" },
     { name = "x402" },
 ]
 
@@ -3979,6 +3993,7 @@ dev = [
     { name = "hypothesis" },
     { name = "langchain" },
     { name = "mypy" },
+    { name = "pay-json" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "web3" },
@@ -3993,6 +4008,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.100" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=0.2" },
+    { name = "pay-json", marker = "extra == 'x402'", specifier = ">=1.1,<2" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "web3", marker = "extra == 'agent'", specifier = ">=6.0" },
     { name = "x402", marker = "extra == 'x402'", specifier = ">=2.8,<3" },
@@ -4008,6 +4024,7 @@ dev = [
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "langchain", specifier = ">=0.2" },
     { name = "mypy", specifier = ">=1.11" },
+    { name = "pay-json", specifier = ">=1.1,<2" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "web3", specifier = ">=6.0" },

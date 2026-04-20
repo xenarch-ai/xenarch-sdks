@@ -42,7 +42,11 @@ fastapi = ["fastapi>=0.100"]
 agent = ["web3>=6.0", "eth-account>=0.11"]
 langchain = ["langchain-core>=0.2"]
 crewai = ["crewai>=0.50"]
-x402 = ["x402>=2.8,<3", "eth-account>=0.11"]
+x402 = [
+    "x402>=2.8,<3",
+    "eth-account>=0.11",
+    "pay.json>=1.1,<2",
+]
 all = ["xenarch[fastapi,agent,langchain,crewai,x402]"]
 
 [build-system]
@@ -83,4 +87,5 @@ dev = [
     "eth-account>=0.11",
     "crewai>=0.50",
     "x402>=2.8,<3",
+    "pay.json>=1.1,<2",
 ]

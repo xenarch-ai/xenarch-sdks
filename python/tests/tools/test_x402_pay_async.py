@@ -58,6 +58,7 @@ def _fresh_tool(
     return XenarchPay(
         private_key=account.key.hex(),
         budget_policy=budget or XenarchBudgetPolicy(),
+        discover_via_pay_json=False,
     )
 
 

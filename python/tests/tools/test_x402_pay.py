@@ -62,17 +62,21 @@ def _fresh_tool(
     *,
     budget: XenarchBudgetPolicy | None = None,
     transport: httpx.MockTransport | None = None,
+    discover_via_pay_json: bool = False,
 ) -> XenarchPay:
     """Build a XenarchPay with a throwaway key and (optionally) a mock transport.
 
     To inject an httpx.MockTransport, we monkeypatch `httpx.Client` at call
     time — see `_with_mock_transport` below. Keeping tool construction and
-    transport injection separate keeps tests readable.
+    transport injection separate keeps tests readable. Pay.json discovery
+    is off by default here so these 5b-era tests stay offline — the 5c
+    pay.json tests live in ``test_x402_pay_payjson.py``.
     """
     account = Account.create()
     return XenarchPay(
         private_key=account.key.hex(),
         budget_policy=budget or XenarchBudgetPolicy(),
+        discover_via_pay_json=discover_via_pay_json,
     )
 
 
@@ -308,3 +312,24 @@ class TestDecimalsOverride:
         assert result["error"] == "budget_exceeded"
         assert result["reason"] == "max_per_call"
         assert result["price_usd"] == "1"  # Decimal repr of exactly 1
+
+
+class TestSSRFBlocks:
+    """Agent-provided URLs must not let the tool fetch private/internal hosts.
+    Without this check, a prompt-injection could exfiltrate cloud metadata
+    (169.254.169.254) or hit loopback services into the LLM's context."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://127.0.0.1/admin",
+            "http://localhost/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://10.0.0.5/internal",
+            "http://[::1]/",
+        ],
+    )
+    def test_private_hosts_refused(self, url: str):
+        tool = _fresh_tool()
+        result = json.loads(tool._run(url))
+        assert result["error"] == "unsafe_host"
