@@ -58,7 +58,7 @@ build-backend = "hatchling.build"
 exclude = ["tests/", "uv.lock"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["xenarch"]
+packages = ["xenarch", "x402_agent"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

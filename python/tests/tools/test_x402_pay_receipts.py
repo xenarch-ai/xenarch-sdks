@@ -115,7 +115,7 @@ def _patch_sync_transport(
         kw.pop("transport", None)
         return _MockClient(transport=transport, **kw)
 
-    monkeypatch.setattr("xenarch.tools.x402_pay.httpx.Client", _factory)
+    monkeypatch.setattr("x402_agent._payer.httpx.Client", _factory)
 
 
 def _patch_async_transport(
@@ -128,7 +128,7 @@ def _patch_async_transport(
         return _MockAsyncClient(transport=transport, **kw)
 
     monkeypatch.setattr(
-        "xenarch.tools.x402_pay.httpx.AsyncClient", _factory
+        "x402_agent._payer.httpx.AsyncClient", _factory
     )
 
 

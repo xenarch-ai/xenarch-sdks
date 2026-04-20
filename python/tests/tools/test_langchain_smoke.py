@@ -114,7 +114,7 @@ class TestInvokeSync:
             kw.pop("transport", None)
             return _MC(transport=transport, **kw)
 
-        monkeypatch.setattr("xenarch.tools.x402_pay.httpx.Client", _factory)
+        monkeypatch.setattr("x402_agent._payer.httpx.Client", _factory)
 
         tool = _tool()
         out = tool.invoke({"url": "https://example.com/article/42"})
@@ -155,7 +155,7 @@ class TestInvokeAsync:
             return _MAC(transport=transport, **kw)
 
         monkeypatch.setattr(
-            "xenarch.tools.x402_pay.httpx.AsyncClient", _factory
+            "x402_agent._payer.httpx.AsyncClient", _factory
         )
 
         tool = _tool()
