@@ -25,8 +25,18 @@ Flow per call:
      silently re-open the budget).
   8. Return a JSON string with the body and transaction metadata.
 
-Receipt fetch + verification and the reputation gate are intentionally not
-implemented here — they ship in subsequent PRs on top of this scaffold.
+After a successful payment, the tool optionally fetches a signed receipt
+from the facilitator (``GET /v1/receipts/{tx_hash}``) and verifies its
+Ed25519 signature against the facilitator's published public key. Receipt
+fetch is auto-on for ``xenarch.dev`` / ``xenarch.com`` hosts and off for
+other facilitators unless explicitly requested — this preserves the
+vendor-neutral story for upstream LangChain usage.
+
+The tool also supports an opt-in reputation gate: set
+``require_reputation_score`` to a ``Decimal`` and the tool will fetch
+``GET /v1/reputation/{pay_to}`` before paying and refuse if the receiver
+scores below the threshold. Unknown receivers (404) score ``0.0`` — the
+gate fails closed for untrusted addresses.
 
 Usage::
 
@@ -272,11 +282,23 @@ class XenarchPay(BaseTool):
     # --- Budget ---------------------------------------------------------
     budget_policy: XenarchBudgetPolicy = Field(default_factory=XenarchBudgetPolicy)
 
-    # --- Facilitator hooks (placeholder for PR 5d) ----------------------
-    # Stored but unused at this layer. Receipts and reputation land in a
-    # later PR — keeping the field here means callers can wire the URL
-    # once and pick up those features without a constructor change.
+    # --- Facilitator hooks ---------------------------------------------
     facilitator_url: str = Field(default="https://xenarch.dev")
+
+    # Auto-on for Xenarch-operated facilitators, off for everyone else —
+    # protects the vendor-neutral upstream story. Set True explicitly to
+    # force fetches against a third-party facilitator that implements the
+    # same wire format, or False to skip even on Xenarch hosts.
+    fetch_receipts: bool | None = Field(default=None)
+    verify_receipts: bool = Field(default=True)
+    facilitator_public_key_url: str | None = Field(default=None)
+    receipts_timeout: float = Field(default=5.0)
+
+    # Opt-in receiver-address gate. Unknown receivers (404 on
+    # ``/v1/reputation/...``) are treated as ``0.0`` so the gate fails
+    # closed for new publishers rather than throwing on them.
+    require_reputation_score: Decimal | None = Field(default=None)
+    reputation_timeout: float = Field(default=5.0)
 
     # --- pay.json pre-discovery ----------------------------------------
     # When on, the tool fetches `/.well-known/pay.json` on the target host
@@ -299,6 +321,18 @@ class XenarchPay(BaseTool):
     _x402_sync: x402ClientSync = PrivateAttr(default=None)  # type: ignore[assignment]
     _x402_async: x402Client = PrivateAttr(default=None)  # type: ignore[assignment]
     _signer_address: str = PrivateAttr(default="")
+    # Public-key cache is per-tool, not module-level: tests can rotate
+    # keys by constructing a fresh tool, and production callers can force
+    # a refresh the same way.
+    _facilitator_pubkey: Any = PrivateAttr(default=None)
+    # Guards the async fetch so N concurrent `_arun` calls on the same
+    # tool only trigger one `GET /.well-known/...key.pem` round-trip.
+    # Lazily created in `_verify_receipt_async` because `asyncio.Lock()`
+    # must be instantiated on the running loop (or at least while a loop
+    # exists) — constructing it in `model_post_init` would bind it to
+    # whichever loop happened to be running at tool-construction time,
+    # which may not be the loop the agent later runs on.
+    _pubkey_lock: Any = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
         # Import here so `eth_account` is only required when the tool is
@@ -319,6 +353,202 @@ class XenarchPay(BaseTool):
     # Shared pre/post logic — kept sync-only; the async path calls the
     # same helpers with an httpx.AsyncClient and awaits the async SDK.
     # -------------------------------------------------------------------
+
+    def _is_xenarch_facilitator(self) -> bool:
+        host = urlparse(self.facilitator_url).hostname or ""
+        return host == "xenarch.dev" or host.endswith(".xenarch.dev") or (
+            host == "xenarch.com" or host.endswith(".xenarch.com")
+        )
+
+    def _should_fetch_receipts(self) -> bool:
+        if self.fetch_receipts is not None:
+            return self.fetch_receipts
+        return self._is_xenarch_facilitator()
+
+    def _public_key_url(self) -> str:
+        if self.facilitator_public_key_url:
+            return self.facilitator_public_key_url
+        return (
+            f"{self.facilitator_url.rstrip('/')}"
+            "/.well-known/xenarch-facilitator-key.pem"
+        )
+
+    def _extract_tx_hash(self, response: httpx.Response) -> str | None:
+        """Decode ``X-PAYMENT-RESPONSE`` into the settlement ``transaction``.
+
+        The header is base64-encoded JSON matching the x402 ``SettleResponse``
+        schema; ``transaction`` is the on-chain hash we use to look up the
+        signed receipt. Missing header or garbage payload → None (receipts
+        are best-effort, never raise on a paid GET that already succeeded).
+        """
+        header = response.headers.get(_X_PAYMENT_RESPONSE_HEADER)
+        if not header:
+            return None
+        try:
+            decoded = json.loads(base64.b64decode(header).decode("utf-8"))
+        except (ValueError, json.JSONDecodeError):
+            return None
+        tx = decoded.get("transaction")
+        return tx if isinstance(tx, str) else None
+
+    def _reputation_gate(self, pay_to: str) -> dict[str, Any] | None:
+        """Run the opt-in reputation check. Returns an error dict to abort."""
+        if self.require_reputation_score is None:
+            return None
+        from xenarch import _reputation  # defer: optional path; keeps import cheap
+
+        try:
+            score = _reputation.fetch_score(
+                self.facilitator_url,
+                pay_to,
+                timeout=self.reputation_timeout,
+            )
+        except httpx.HTTPError as exc:
+            # Fail closed on transport errors — the gate exists precisely
+            # to protect against paying unknown/untrusted receivers.
+            return {
+                "error": "reputation_lookup_failed",
+                "pay_to": pay_to,
+                "details": str(exc),
+            }
+        if score < self.require_reputation_score:
+            return {
+                "error": "reputation_below_threshold",
+                "pay_to": pay_to,
+                "score": str(score),
+                "required": str(self.require_reputation_score),
+            }
+        return None
+
+    async def _reputation_gate_async(
+        self, pay_to: str
+    ) -> dict[str, Any] | None:
+        if self.require_reputation_score is None:
+            return None
+        from xenarch import _reputation
+
+        try:
+            score = await _reputation.fetch_score_async(
+                self.facilitator_url,
+                pay_to,
+                timeout=self.reputation_timeout,
+            )
+        except httpx.HTTPError as exc:
+            return {
+                "error": "reputation_lookup_failed",
+                "pay_to": pay_to,
+                "details": str(exc),
+            }
+        if score < self.require_reputation_score:
+            return {
+                "error": "reputation_below_threshold",
+                "pay_to": pay_to,
+                "score": str(score),
+                "required": str(self.require_reputation_score),
+            }
+        return None
+
+    def _attach_receipt(
+        self,
+        response_dict: dict[str, Any],
+        paid_response: httpx.Response,
+    ) -> None:
+        """Mutate *response_dict* in place to add receipt + verification.
+
+        Best-effort: receipt fetch failures degrade the success response
+        (add ``receipt_error``) but never turn a paid GET into a failure,
+        because the spend has already been committed on the budget.
+        """
+        if not self._should_fetch_receipts():
+            return
+        tx_hash = self._extract_tx_hash(paid_response)
+        if not tx_hash:
+            response_dict["receipt_error"] = "no_tx_hash_in_payment_response"
+            return
+        from xenarch import _receipts
+
+        try:
+            receipt = _receipts.fetch_receipt(
+                self.facilitator_url,
+                tx_hash,
+                timeout=self.receipts_timeout,
+            )
+        except httpx.HTTPError as exc:
+            response_dict["receipt_error"] = f"fetch_failed: {exc}"
+            return
+        if receipt is None:
+            response_dict["receipt_error"] = "receipt_not_found"
+            return
+        response_dict["receipt"] = receipt
+        if self.verify_receipts:
+            response_dict["signature_verified"] = self._verify_receipt(
+                receipt
+            )
+
+    async def _attach_receipt_async(
+        self,
+        response_dict: dict[str, Any],
+        paid_response: httpx.Response,
+    ) -> None:
+        if not self._should_fetch_receipts():
+            return
+        tx_hash = self._extract_tx_hash(paid_response)
+        if not tx_hash:
+            response_dict["receipt_error"] = "no_tx_hash_in_payment_response"
+            return
+        from xenarch import _receipts
+
+        try:
+            receipt = await _receipts.fetch_receipt_async(
+                self.facilitator_url,
+                tx_hash,
+                timeout=self.receipts_timeout,
+            )
+        except httpx.HTTPError as exc:
+            response_dict["receipt_error"] = f"fetch_failed: {exc}"
+            return
+        if receipt is None:
+            response_dict["receipt_error"] = "receipt_not_found"
+            return
+        response_dict["receipt"] = receipt
+        if self.verify_receipts:
+            response_dict["signature_verified"] = (
+                await self._verify_receipt_async(receipt)
+            )
+
+    def _verify_receipt(self, receipt: dict[str, Any]) -> bool:
+        from xenarch import _receipts
+
+        if self._facilitator_pubkey is None:
+            try:
+                self._facilitator_pubkey = _receipts.fetch_public_key(
+                    self._public_key_url(),
+                    timeout=self.receipts_timeout,
+                )
+            except (httpx.HTTPError, ValueError):
+                return False
+        return _receipts.verify_signature(self._facilitator_pubkey, receipt)
+
+    async def _verify_receipt_async(self, receipt: dict[str, Any]) -> bool:
+        from xenarch import _receipts
+
+        if self._facilitator_pubkey is None:
+            if self._pubkey_lock is None:
+                self._pubkey_lock = asyncio.Lock()
+            async with self._pubkey_lock:
+                # Re-check under the lock — another coroutine may have
+                # populated the cache while we were waiting.
+                if self._facilitator_pubkey is None:
+                    try:
+                        self._facilitator_pubkey = (
+                            await _receipts.fetch_public_key_async(
+                                self._public_key_url(),
+                                timeout=self.receipts_timeout,
+                            )
+                        )
+                    except (httpx.HTTPError, ValueError):
+                        return False
+        return _receipts.verify_signature(self._facilitator_pubkey, receipt)
 
     def _pay_json_pre_check(self, url: str) -> dict[str, Any] | None:
         """Fetch pay.json for the URL's host; return an error dict to abort,
@@ -416,21 +646,21 @@ class XenarchPay(BaseTool):
         response: httpx.Response,
         accept: PaymentRequirements,
         price: Decimal,
-    ) -> str:
+    ) -> dict[str, Any]:
         body = _truncate_body(response.text, self.max_response_bytes)
-        return json.dumps(
-            {
-                "success": True,
-                "url": url,
-                "amount_usd": str(price),
-                "pay_to": accept.pay_to,
-                "asset": accept.asset,
-                "network": accept.network,
-                "payment_response": response.headers.get(_X_PAYMENT_RESPONSE_HEADER),
-                "body": body,
-                "session_spent_usd": str(self.budget_policy.session_spent),
-            }
-        )
+        return {
+            "success": True,
+            "url": url,
+            "amount_usd": str(price),
+            "pay_to": accept.pay_to,
+            "asset": accept.asset,
+            "network": accept.network,
+            "payment_response": response.headers.get(
+                _X_PAYMENT_RESPONSE_HEADER
+            ),
+            "body": body,
+            "session_spent_usd": str(self.budget_policy.session_spent),
+        }
 
     # -------------------------------------------------------------------
     # Sync entry point
@@ -488,6 +718,13 @@ class XenarchPay(BaseTool):
 
                 price = _price_usd(accept)
 
+                # Reputation gate runs before the budget lock: a failing
+                # lookup must not block other concurrent payments from
+                # acquiring the session budget.
+                rep_error = self._reputation_gate(accept.pay_to)
+                if rep_error is not None:
+                    return json.dumps(rep_error)
+
                 # Hold the lock from budget check through commit so two
                 # concurrent calls on the same tool can't both pass a
                 # session-cap check when only one would fit.
@@ -523,9 +760,11 @@ class XenarchPay(BaseTool):
                     # the spend on the session budget.
                     self.budget_policy.commit(price)
 
-                    return self._success_response(
+                    result = self._success_response(
                         url=url, response=paid, accept=accept, price=price
                     )
+                    self._attach_receipt(result, paid)
+                    return json.dumps(result)
         except httpx.HTTPError as exc:
             return json.dumps(
                 {"error": "http_error", "kind": type(exc).__name__}
@@ -594,6 +833,10 @@ class XenarchPay(BaseTool):
 
                 price = _price_usd(accept)
 
+                rep_error = await self._reputation_gate_async(accept.pay_to)
+                if rep_error is not None:
+                    return json.dumps(rep_error)
+
                 with self.budget_policy.lock():
                     gate_error = self._budget_gate(
                         url=url, accept=accept, price=price
@@ -622,9 +865,11 @@ class XenarchPay(BaseTool):
 
                     self.budget_policy.commit(price)
 
-                    return self._success_response(
+                    result = self._success_response(
                         url=url, response=paid, accept=accept, price=price
                     )
+                    await self._attach_receipt_async(result, paid)
+                    return json.dumps(result)
         except httpx.HTTPError as exc:
             return json.dumps(
                 {"error": "http_error", "kind": type(exc).__name__}
