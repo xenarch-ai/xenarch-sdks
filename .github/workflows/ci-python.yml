@@ -37,7 +37,7 @@ jobs:
         run: uv run pytest
 
       - name: Type check (strict)
-        run: uv run mypy --strict xenarch/tools/ x402_agent/ xenarch/_payer.py
+        run: uv run mypy --strict xenarch/tools/ xenarch/_payer.py
 
       - name: Doctests
-        run: uv run pytest --doctest-modules x402_agent/ xenarch/tools/
+        run: uv run pytest --doctest-modules xenarch/_receipts.py xenarch/tools/

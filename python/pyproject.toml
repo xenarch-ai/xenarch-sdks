@@ -44,8 +44,7 @@ agent = ["web3>=6.0", "eth-account>=0.11"]
 langchain = ["langchain-core>=0.2"]
 crewai = ["crewai>=0.50"]
 x402 = [
-    "x402>=2.8,<3",
-    "eth-account>=0.11",
+    "x402-agent>=0.1.1,<0.2",
     "pay.json>=1.1,<2",
 ]
 all = ["xenarch[fastapi,agent,langchain,crewai,x402]"]
@@ -58,7 +57,7 @@ build-backend = "hatchling.build"
 exclude = ["tests/", "uv.lock"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["xenarch", "x402_agent"]
+packages = ["xenarch"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -85,8 +84,7 @@ dev = [
     "mypy>=1.11",
     "langchain>=0.2",
     "web3>=6.0",
-    "eth-account>=0.11",
     "crewai>=0.50",
-    "x402>=2.8,<3",
+    "x402-agent>=0.1.1,<0.2",
     "pay.json>=1.1,<2",
 ]
