@@ -3947,6 +3947,30 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d9/c2/c5c190bfe9e2b93e350cc3b950bd23c9ec41463e12f3dcb6f9380e473572/x402-2.8.0-py3-none-any.whl", hash = "sha256:0d33becdcc498bf4c7d16ea42bc45698888bb48ac5c7c1453ea53c4a56f8e666", size = 1121990, upload-time = "2026-04-17T18:02:47.43Z" },
 ]
 
+[package.optional-dependencies]
+evm = [
+    { name = "eth-abi" },
+    { name = "eth-account" },
+    { name = "eth-keys" },
+    { name = "eth-utils" },
+    { name = "web3" },
+]
+
+[[package]]
+name = "x402-agent"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "eth-account" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "x402", extra = ["evm"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/98/24bc45ae0bc82cf1d58116dea6782ccee509394f1619dfeb0c933e1cdeae/x402_agent-0.1.1.tar.gz", hash = "sha256:d0facf5ab369300f4b55dc1e6b0a2878f9d879c9e99e2bd7eb3b5bf0ca6c0d2e", size = 121400, upload-time = "2026-04-21T08:21:08.253Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/21/b215731ab8371b2133081246abc33cc40c1e73616b8a3c33b9242ffb61ff/x402_agent-0.1.1-py3-none-any.whl", hash = "sha256:1fbab10691c4cf455ce635436935318e3df37845efd8d0544569370b119a3f62", size = 13541, upload-time = "2026-04-21T08:21:05.838Z" },
+]
+
 [[package]]
 name = "xenarch"
 version = "0.1.2"
@@ -3969,7 +3993,7 @@ all = [
     { name = "langchain-core" },
     { name = "pay-json" },
     { name = "web3" },
-    { name = "x402" },
+    { name = "x402-agent" },
 ]
 crewai = [
     { name = "crewai" },
@@ -3981,15 +4005,13 @@ langchain = [
     { name = "langchain-core" },
 ]
 x402 = [
-    { name = "eth-account" },
     { name = "pay-json" },
-    { name = "x402" },
+    { name = "x402-agent" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "crewai" },
-    { name = "eth-account" },
     { name = "fastapi" },
     { name = "hypothesis" },
     { name = "langchain" },
@@ -3998,7 +4020,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "web3" },
-    { name = "x402" },
+    { name = "x402-agent" },
 ]
 
 [package.metadata]
@@ -4006,14 +4028,13 @@ requires-dist = [
     { name = "crewai", marker = "extra == 'crewai'", specifier = ">=0.50" },
     { name = "cryptography", specifier = ">=42" },
     { name = "eth-account", marker = "extra == 'agent'", specifier = ">=0.11" },
-    { name = "eth-account", marker = "extra == 'x402'", specifier = ">=0.11" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.100" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=0.2" },
     { name = "pay-json", marker = "extra == 'x402'", specifier = ">=1.1,<2" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "web3", marker = "extra == 'agent'", specifier = ">=6.0" },
-    { name = "x402", marker = "extra == 'x402'", specifier = ">=2.8,<3" },
+    { name = "x402-agent", marker = "extra == 'x402'", specifier = ">=0.1.1,<0.2" },
     { name = "xenarch", extras = ["fastapi", "agent", "langchain", "crewai", "x402"], marker = "extra == 'all'" },
 ]
 provides-extras = ["fastapi", "agent", "langchain", "crewai", "x402", "all"]
@@ -4021,7 +4042,6 @@ provides-extras = ["fastapi", "agent", "langchain", "crewai", "x402", "all"]
 [package.metadata.requires-dev]
 dev = [
     { name = "crewai", specifier = ">=0.50" },
-    { name = "eth-account", specifier = ">=0.11" },
     { name = "fastapi", specifier = ">=0.100" },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "langchain", specifier = ">=0.2" },
@@ -4030,7 +4050,7 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "web3", specifier = ">=6.0" },
-    { name = "x402", specifier = ">=2.8,<3" },
+    { name = "x402-agent", specifier = ">=0.1.1,<0.2" },
 ]
 
 [[package]]
