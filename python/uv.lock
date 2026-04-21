@@ -3958,7 +3958,7 @@ evm = [
 
 [[package]]
 name = "x402-agent"
-version = "0.1.1"
+version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eth-account" },
@@ -3966,9 +3966,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "x402", extra = ["evm"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f1/98/24bc45ae0bc82cf1d58116dea6782ccee509394f1619dfeb0c933e1cdeae/x402_agent-0.1.1.tar.gz", hash = "sha256:d0facf5ab369300f4b55dc1e6b0a2878f9d879c9e99e2bd7eb3b5bf0ca6c0d2e", size = 121400, upload-time = "2026-04-21T08:21:08.253Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/1f/061a88851dbb30a4bebb4902380d25f9830774a8428b3630f1a560eb16d7/x402_agent-0.1.2.tar.gz", hash = "sha256:c6a50aecac8d47f055aeed0373eaf1b0df3c6c07f197ab41204b4597af2b8c30", size = 123289, upload-time = "2026-04-21T10:03:36.262Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/42/21/b215731ab8371b2133081246abc33cc40c1e73616b8a3c33b9242ffb61ff/x402_agent-0.1.1-py3-none-any.whl", hash = "sha256:1fbab10691c4cf455ce635436935318e3df37845efd8d0544569370b119a3f62", size = 13541, upload-time = "2026-04-21T08:21:05.838Z" },
+    { url = "https://files.pythonhosted.org/packages/98/7e/6897b07829cea7124258eca773f351a75b07d2c45250f0d18ba8a0c88bad/x402_agent-0.1.2-py3-none-any.whl", hash = "sha256:f1775285c64079283e02c492ed57b59d2576ae387eadc0b78d518e8bd94233f0", size = 13977, upload-time = "2026-04-21T10:03:34.315Z" },
 ]
 
 [[package]]
@@ -4034,7 +4034,7 @@ requires-dist = [
     { name = "pay-json", marker = "extra == 'x402'", specifier = ">=1.1,<2" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "web3", marker = "extra == 'agent'", specifier = ">=6.0" },
-    { name = "x402-agent", marker = "extra == 'x402'", specifier = ">=0.1.1,<0.2" },
+    { name = "x402-agent", marker = "extra == 'x402'", specifier = ">=0.1.2,<0.2" },
     { name = "xenarch", extras = ["fastapi", "agent", "langchain", "crewai", "x402"], marker = "extra == 'all'" },
 ]
 provides-extras = ["fastapi", "agent", "langchain", "crewai", "x402", "all"]
@@ -4050,7 +4050,7 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "web3", specifier = ">=6.0" },
-    { name = "x402-agent", specifier = ">=0.1.1,<0.2" },
+    { name = "x402-agent", specifier = ">=0.1.2,<0.2" },
 ]
 
 [[package]]
