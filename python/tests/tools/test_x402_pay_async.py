@@ -77,7 +77,7 @@ def _with_mock_async_transport(
         kwargs.pop("transport", None)
         return _MockAsyncClient(transport=transport, **kwargs)
 
-    monkeypatch.setattr("xenarch.tools.x402_pay.httpx.AsyncClient", _client_factory)
+    monkeypatch.setattr("x402_agent._payer.httpx.AsyncClient", _client_factory)
 
 
 class TestAsyncNoPayment:

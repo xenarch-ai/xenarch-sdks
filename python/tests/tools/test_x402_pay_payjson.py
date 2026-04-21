@@ -89,7 +89,7 @@ def _mock_resource_transport(
         kwargs.pop("transport", None)
         return _MockClient(transport=transport, **kwargs)
 
-    monkeypatch.setattr("xenarch.tools.x402_pay.httpx.Client", _factory)
+    monkeypatch.setattr("x402_agent._payer.httpx.Client", _factory)
 
 
 def _patch_payjson(monkeypatch: pytest.MonkeyPatch, result: Any) -> list[str]:

@@ -98,7 +98,7 @@ def _with_mock_transport(
         kwargs.pop("transport", None)
         return _MockClient(transport=transport, **kwargs)
 
-    monkeypatch.setattr("xenarch.tools.x402_pay.httpx.Client", _client_factory)
+    monkeypatch.setattr("x402_agent._payer.httpx.Client", _client_factory)
 
 
 class TestNoPaymentRequired:

@@ -32,7 +32,7 @@ import os
 import httpx
 import pytest
 
-from xenarch.tools.x402_pay import _select_accept
+from x402_agent import select_accept as _select_accept
 from x402.schemas import parse_payment_required, PaymentRequired
 
 
