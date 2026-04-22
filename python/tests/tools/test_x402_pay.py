@@ -115,12 +115,14 @@ class TestNoPaymentRequired:
 
 
 class Test402Parse:
-    def test_v1_body_returns_parse_failed(
+    def test_v1_body_with_no_accepts_returns_no_supported_scheme(
         self, monkeypatch: pytest.MonkeyPatch
     ):
-        # V1 uses `x402Version: 1` and a different top-level shape. PR 5b
-        # is V2-only, so V1 bodies must surface as parse_failed rather than
-        # silently paying against a misread amount.
+        # x402-agent 0.1.2 adds V1 parse support, so a V1 body now parses
+        # successfully. With an empty accepts list there's no scheme to
+        # settle, so the caller sees no_supported_scheme — not a parse
+        # failure. This is strictly safer than the old behaviour: we never
+        # sign against a misread amount because the empty list short-circuits.
         v1_body = {"x402Version": 1, "accepts": []}
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -129,7 +131,7 @@ class Test402Parse:
         _with_mock_transport(monkeypatch, handler)
         tool = _fresh_tool()
         result = json.loads(tool._run("https://example.com/gated"))
-        assert result["error"] == "x402_parse_failed"
+        assert result["error"] == "no_supported_scheme"
 
     def test_no_exact_scheme_refused(self, monkeypatch: pytest.MonkeyPatch):
         body = {
