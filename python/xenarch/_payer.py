@@ -23,9 +23,11 @@ from urllib.parse import urlparse
 
 import httpx
 
-from x402.schemas import PaymentRequirements
 from x402_agent import X402Payer
-from x402_agent._helpers import X_PAYMENT_RESPONSE_HEADER
+from x402_agent._helpers import (
+    AnyPaymentRequirements,
+    X_PAYMENT_RESPONSE_HEADER,
+)
 
 
 class XenarchPayer(X402Payer):
@@ -107,7 +109,7 @@ class XenarchPayer(X402Payer):
         self,
         *,
         url: str,
-        accept: PaymentRequirements,
+        accept: AnyPaymentRequirements,
         price: Decimal,
     ) -> dict[str, Any] | None:
         return self._reputation_gate(accept.pay_to)
@@ -116,7 +118,7 @@ class XenarchPayer(X402Payer):
         self,
         *,
         url: str,
-        accept: PaymentRequirements,
+        accept: AnyPaymentRequirements,
         price: Decimal,
     ) -> dict[str, Any] | None:
         return await self._reputation_gate_async(accept.pay_to)
