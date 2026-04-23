@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
-    {name = "Xenarch", email = "hello@xenarch.dev"},
+    {name = "Xenarch", email = "hello@xenarch.com"},
 ]
 keywords = [
     "xenarch", "x402", "http-402", "mcp", "micropayments",
