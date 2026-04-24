@@ -1,31 +1,69 @@
-"""Tests for ASGI middleware."""
+"""Tests for ASGI middleware (post-XEN-179 protocol).
+
+Verification flow under test:
+
+* Bot hits /article without payment headers → 402 with new shape.
+* Bot hits /article with X-Xenarch-Gate-Id + X-Xenarch-Tx-Hash, the
+  middleware re-verifies via the platform, then passes through.
+* Repeat verified hit within cache TTL skips the platform call.
+"""
+
+from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from tests.conftest import generate_test_token
-from xenarch.client import GateResponse
+from xenarch.client import (
+    FacilitatorOption,
+    GateResponse,
+    PaymentRequirements,
+    VerifiedPaymentResponse,
+    XenarchAPIError,
+)
+
+from tests.conftest import TEST_GATE_ID, TEST_TX_HASH
 
 
 @pytest.fixture
-def mock_gate():
+def mock_gate() -> GateResponse:
     return GateResponse(
-        xenarch=True,
-        gate_id="550e8400-e29b-41d4-a716-446655440001",
+        x402Version=1,
+        accepts=[
+            PaymentRequirements(
+                scheme="exact",
+                network="base",
+                maxAmountRequired="10000",
+                resource="https://example.com/article",
+                description="",
+                mimeType="text/html",
+                payTo="0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+                maxTimeoutSeconds=3600,
+                asset="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            )
+        ],
+        gate_id=TEST_GATE_ID,
         price_usd="0.01",
-        splitter="0x1234567890abcdef1234567890abcdef12345678",
-        collector="0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        seller_wallet="0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
         network="base",
-        asset="USDC",
-        protocol="x402",
-        verify_url="https://xenarch.dev/v1/gates/550e8400-e29b-41d4-a716-446655440001",
-        expires="2026-03-16T00:00:00Z",
+        facilitators=[FacilitatorOption(name="PayAI", url="https://facilitator.payai.network")],
+        verify_url=f"https://xenarch.dev/v1/gates/{TEST_GATE_ID}/verify",
+        expires="2026-04-25T00:00:00Z",
+    )
+
+
+@pytest.fixture
+def mock_verified() -> VerifiedPaymentResponse:
+    return VerifiedPaymentResponse(
+        gate_id=TEST_GATE_ID,
+        status="paid",
+        tx_hash=TEST_TX_HASH,
+        amount_usd="0.01",
+        verified_at="2026-04-24T01:00:00Z",
     )
 
 
 class TestXenarchMiddleware:
-
     @pytest.mark.asyncio
     async def test_human_request_passes_through(self, async_client):
         resp = await async_client.get(
@@ -36,7 +74,7 @@ class TestXenarchMiddleware:
         assert resp.json() == {"message": "hello"}
 
     @pytest.mark.asyncio
-    async def test_bot_request_returns_402(self, async_client, mock_gate):
+    async def test_bot_request_returns_402_with_new_shape(self, async_client, mock_gate):
         with patch(
             "xenarch.middleware.XenarchClient.create_gate",
             new_callable=AsyncMock,
@@ -46,28 +84,44 @@ class TestXenarchMiddleware:
                 "/article",
                 headers={"user-agent": "GPTBot/1.0"},
             )
-            assert resp.status_code == 402
-            data = resp.json()
-            assert data["xenarch"] is True
-            assert data["protocol"] == "x402"
+        assert resp.status_code == 402
+        body = resp.json()
+        assert body["xenarch"] is True
+        assert body["protocol"] == "x402"
+        assert body["seller_wallet"] == "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        assert "splitter" not in body
+        assert "collector" not in body
+        assert isinstance(body["accepts"], list) and len(body["accepts"]) == 1
+        assert body["accepts"][0]["payTo"] == body["seller_wallet"]
+        assert isinstance(body["facilitators"], list) and len(body["facilitators"]) == 1
 
     @pytest.mark.asyncio
-    async def test_bot_with_valid_token_passes_through(self, async_client):
-        token = generate_test_token(url="/article")
-        resp = await async_client.get(
-            "/article",
-            headers={
-                "user-agent": "GPTBot/1.0",
-                "authorization": f"Bearer {token}",
-            },
-        )
+    async def test_bot_with_verified_headers_passes_through(self, async_client, mock_verified):
+        with patch(
+            "xenarch.middleware.XenarchClient.verify_payment",
+            new_callable=AsyncMock,
+            return_value=mock_verified,
+        ):
+            resp = await async_client.get(
+                "/article",
+                headers={
+                    "user-agent": "GPTBot/1.0",
+                    "x-xenarch-gate-id": TEST_GATE_ID,
+                    "x-xenarch-tx-hash": TEST_TX_HASH,
+                },
+            )
         assert resp.status_code == 200
         assert resp.json() == {"content": "premium article"}
 
     @pytest.mark.asyncio
-    async def test_bot_with_expired_token_returns_402(self, async_client, mock_gate):
-        token = generate_test_token(expired=True)
+    async def test_bot_with_rejected_verification_returns_402(
+        self, async_client, mock_gate
+    ):
         with patch(
+            "xenarch.middleware.XenarchClient.verify_payment",
+            new_callable=AsyncMock,
+            side_effect=XenarchAPIError(404, "Gate not found"),
+        ), patch(
             "xenarch.middleware.XenarchClient.create_gate",
             new_callable=AsyncMock,
             return_value=mock_gate,
@@ -75,11 +129,12 @@ class TestXenarchMiddleware:
             resp = await async_client.get(
                 "/article",
                 headers={
-                    "user-agent": "ClaudeBot/1.0",
-                    "authorization": f"Bearer {token}",
+                    "user-agent": "GPTBot/1.0",
+                    "x-xenarch-gate-id": TEST_GATE_ID,
+                    "x-xenarch-tx-hash": TEST_TX_HASH,
                 },
             )
-            assert resp.status_code == 402
+        assert resp.status_code == 402
 
     @pytest.mark.asyncio
     async def test_excluded_path_passes_through_for_bots(self, async_client):
@@ -91,7 +146,7 @@ class TestXenarchMiddleware:
         assert resp.json() == {"status": "ok"}
 
     @pytest.mark.asyncio
-    async def test_api_failure_passes_through(self, async_client):
+    async def test_create_gate_failure_passes_bot_through(self, async_client):
         with patch(
             "xenarch.middleware.XenarchClient.create_gate",
             new_callable=AsyncMock,
@@ -101,57 +156,40 @@ class TestXenarchMiddleware:
                 "/article",
                 headers={"user-agent": "GPTBot/1.0"},
             )
-            assert resp.status_code == 200
-            assert resp.json() == {"content": "premium article"}
-
-    # --- Per-page scoping (XEN-115 fix) ---
-
-    @pytest.mark.asyncio
-    async def test_page_scoped_token_rejected_on_wrong_path(
-        self, async_client, mock_gate
-    ):
-        """A page-scoped token for /other-page is rejected when bot hits /article."""
-        token = generate_test_token(url="/other-page", scope="page")
-        with patch(
-            "xenarch.middleware.XenarchClient.create_gate",
-            new_callable=AsyncMock,
-            return_value=mock_gate,
-        ):
-            resp = await async_client.get(
-                "/article",
-                headers={
-                    "user-agent": "GPTBot/1.0",
-                    "authorization": f"Bearer {token}",
-                },
-            )
-            assert resp.status_code == 402
-
-    # --- Path scope ---
-
-    @pytest.mark.asyncio
-    async def test_path_scoped_token_accepted_on_matching_path(self, async_client):
-        """Path-scoped token for /article* matches /article."""
-        token = generate_test_token(
-            url="/article", scope="path", path_pattern="/article*",
-        )
-        resp = await async_client.get(
-            "/article",
-            headers={
-                "user-agent": "GPTBot/1.0",
-                "authorization": f"Bearer {token}",
-            },
-        )
         assert resp.status_code == 200
+        assert resp.json() == {"content": "premium article"}
 
     @pytest.mark.asyncio
-    async def test_path_scoped_token_rejected_on_non_matching_path(
+    async def test_repeat_verification_within_ttl_skips_platform_call(
+        self, async_client, mock_verified
+    ):
+        with patch(
+            "xenarch.middleware.XenarchClient.verify_payment",
+            new_callable=AsyncMock,
+            return_value=mock_verified,
+        ) as mock_verify:
+            for _ in range(3):
+                resp = await async_client.get(
+                    "/article",
+                    headers={
+                        "user-agent": "GPTBot/1.0",
+                        "x-xenarch-gate-id": TEST_GATE_ID,
+                        "x-xenarch-tx-hash": TEST_TX_HASH,
+                    },
+                )
+                assert resp.status_code == 200
+            # Cache means we only hit the platform once for the same (gate, tx) pair.
+            assert mock_verify.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_partial_payment_headers_treated_as_unverified(
         self, async_client, mock_gate
     ):
-        """Path-scoped token for /docs/* is rejected when hitting /article."""
-        token = generate_test_token(
-            url="/docs/intro", scope="path", path_pattern="/docs/*",
-        )
+        # Only gate_id, no tx_hash → middleware should fall through to bot/402 path.
         with patch(
+            "xenarch.middleware.XenarchClient.verify_payment",
+            new_callable=AsyncMock,
+        ) as mock_verify, patch(
             "xenarch.middleware.XenarchClient.create_gate",
             new_callable=AsyncMock,
             return_value=mock_gate,
@@ -160,7 +198,8 @@ class TestXenarchMiddleware:
                 "/article",
                 headers={
                     "user-agent": "GPTBot/1.0",
-                    "authorization": f"Bearer {token}",
+                    "x-xenarch-gate-id": TEST_GATE_ID,
                 },
             )
-            assert resp.status_code == 402
+        assert resp.status_code == 402
+        mock_verify.assert_not_called()
