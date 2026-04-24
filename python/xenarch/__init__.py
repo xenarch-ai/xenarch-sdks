@@ -19,6 +19,15 @@ def __getattr__(name: str):
     if name == "require_payment":
         from xenarch.decorator import require_payment
         return require_payment
+    if name in {
+        "Router",
+        "FacilitatorConfig",
+        "PaymentContext",
+        "HealthState",
+        "DEFAULT_FACILITATOR_STACK",
+    }:
+        from xenarch import router as _router
+        return getattr(_router, name)
     raise AttributeError(f"module 'xenarch' has no attribute {name!r}")
 
 
@@ -28,4 +37,9 @@ __all__ = [
     "XenarchMiddleware",
     "require_payment",
     "is_bot",
+    "Router",
+    "FacilitatorConfig",
+    "PaymentContext",
+    "HealthState",
+    "DEFAULT_FACILITATOR_STACK",
 ]
