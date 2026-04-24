@@ -15,69 +15,35 @@ Xenarch is a non-custodial x402 MCP server and Python SDK that lets AI agents pa
 ## Install
 
 ```bash
-# For AI agents (wallet + on-chain payments)
-pip install xenarch[agent]
-
-# For LangChain agents
-pip install xenarch[agent,langchain]
-
-# For CrewAI agents
-pip install xenarch[agent,crewai]
+# For LangChain agents paying x402-gated APIs
+pip install xenarch[langchain,x402]
 
 # For publishers (FastAPI middleware)
 pip install xenarch[fastapi]
 ```
 
-## Agent: pay for gated content
+## Agent: pay for x402-gated content
 
 ```python
-from xenarch.agent_client import check_gate, verify_payment
-from xenarch.wallet import load_wallet_or_create
-from xenarch.payment import execute_payment
+from decimal import Decimal
 
-# Auto-creates wallet on first run (saved to ~/.xenarch/wallet.json)
-wallet = load_wallet_or_create()
+from xenarch.tools import XenarchPay, XenarchBudgetPolicy
 
-# 1. Check if a URL is gated
-gate = check_gate("https://example.com/premium-article")
-if gate:
-    # 2. Pay via USDC on Base (max $1 per payment)
-    result = execute_payment(
-        wallet=wallet,
-        splitter_address=gate.splitter,
-        collector_address=gate.collector,
-        price_usd=gate.price_usd,
-    )
-    # 3. Verify payment, get access token
-    access = verify_payment(gate.verify_url, result.tx_hash)
-    print(f"Access token: {access['access_token']}")
-```
-
-## LangChain integration
-
-```python
-from xenarch.tools.langchain import CheckGateTool, PayTool, GetHistoryTool
-
-tools = [CheckGateTool(), PayTool(), GetHistoryTool()]
-
-# Use with any LangChain agent
-from langchain.agents import initialize_agent
-agent = initialize_agent(tools=tools, llm=llm, agent="zero-shot-react-description")
-agent.run("Check if example.com has a paywall and pay for access if needed")
-```
-
-## CrewAI integration
-
-```python
-from xenarch.tools.crewai import check_gate, pay, get_history
-from crewai import Agent
-
-researcher = Agent(
-    role="Web Researcher",
-    tools=[check_gate, pay, get_history],
-    goal="Access premium content by paying micropayments when needed",
+tool = XenarchPay(
+    private_key="0x...",
+    budget_policy=XenarchBudgetPolicy(
+        max_per_call=Decimal("0.05"),
+        max_per_session=Decimal("1.00"),
+    ),
 )
+
+# Use directly, or register with any LangChain agent.
+print(tool.invoke("https://example.com/premium-article"))
 ```
+
+`XenarchPay` is a LangChain `BaseTool` over the neutral `x402-agent`
+pay loop, plus Xenarch's signed-receipt and reputation extras. Settles
+USDC on Base via EIP-3009 — never custodial.
 
 ## FastAPI micropayments — publisher middleware
 
@@ -119,21 +85,6 @@ For Python publishers this means:
 - No integration with Stripe, PayPal, or card processors
 - An API monetization model that works for the long tail of APIs, not just enterprise
 
-## Wallet management
-
-On first use, `load_wallet_or_create()` generates a wallet automatically and saves it to `~/.xenarch/wallet.json`. No signup, no API key.
-
-To fund your wallet, send USDC and a small amount of ETH (for gas) to your wallet address on Base.
-
-You can also configure via environment variables:
-
-```bash
-export XENARCH_PRIVATE_KEY=0x...     # Wallet private key
-export XENARCH_RPC_URL=...           # Base RPC (default: https://mainnet.base.org)
-export XENARCH_API_BASE=...          # API base (default: https://api.xenarch.dev)
-export XENARCH_NETWORK=base          # base or base-sepolia
-```
-
 ## How it works
 
 Xenarch is a non-custodial payment network. When an AI agent hits an x402-gated URL:
@@ -148,10 +99,13 @@ No signup. No API keys. No custodial balances. Every payment is an on-chain USDC
 ## FAQ
 
 **How does Claude pay for APIs from Python?**
-Claude (or any MCP agent) uses the Xenarch MCP server directly. For Python code that isn't an MCP agent, use `xenarch[agent]` — `load_wallet_or_create()` + `execute_payment()` — to pay any x402-gated URL.
+Claude (or any MCP agent) uses the Xenarch MCP server directly. For
+Python code that isn't an MCP agent, use `xenarch[langchain,x402]` —
+`XenarchPay` is a LangChain `BaseTool` that pays any x402-gated URL.
 
 **Does Xenarch work with LangChain or CrewAI?**
-Yes. Import `xenarch.tools.langchain` or `xenarch.tools.crewai` and register the provided tools (`check_gate`, `pay`, `get_history`) with your agent.
+LangChain works today via `from xenarch.tools import XenarchPay`. CrewAI,
+AutoGen, and LangGraph adapters are on the roadmap (XEN-172/173/174).
 
 **Is Xenarch a Stripe alternative for APIs?**
 For per-request API monetization, yes. Stripe requires account creation, API keys, and charges 2.9% + $0.30 per transaction. Xenarch charges 0% today (0.99% hard-capped on-chain) and requires no account — the caller just pays USDC on Base.
