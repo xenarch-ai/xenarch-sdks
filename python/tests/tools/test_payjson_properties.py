@@ -42,7 +42,7 @@ _PROFILE = settings(
 
 
 _addresses = st.from_regex(r"^0x[0-9a-fA-F]{40}$", fullmatch=True)
-_versions = st.sampled_from(["1.0", "1.1"])
+_versions = st.sampled_from(["1.2"])
 
 # Non-negative decimal strings matching _PRICE_RE: `\d+(\.\d+)?`.
 _price_strings = st.decimals(
@@ -95,7 +95,7 @@ class TestValidDocsParse:
     @given(doc=_valid_doc())
     def test_parse_never_crashes(self, doc: dict[str, Any]) -> None:
         parsed = PayJson.parse(doc)
-        assert parsed.version in {"1.0", "1.1"}
+        assert parsed.version == "1.2"
         assert parsed.rules  # non-empty
 
     @_PROFILE
