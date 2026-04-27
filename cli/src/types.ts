@@ -1,4 +1,10 @@
 // Xenarch CLI types and contract constants
+//
+// Post-XEN-179 (no-splitter pivot): the CLI no longer touches a Xenarch
+// splitter contract. Payment goes directly from the agent's facilitator
+// to the publisher's `seller_wallet` via x402's EIP-3009 settle flow.
+// Subsequent gated requests carry `X-Xenarch-Gate-Id` + `X-Xenarch-Tx-Hash`
+// headers (see `src/lib/payment.ts`).
 
 // --- Config ---
 
@@ -37,15 +43,45 @@ export const DEFAULT_CONFIG: Config = {
 
 // --- API Responses ---
 
+/** One x402 v1 PaymentRequirements entry inside a 402 response. */
+export interface PaymentRequirements {
+  scheme: string;
+  network: string;
+  maxAmountRequired: string;
+  resource: string;
+  description?: string;
+  mimeType?: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  asset: string;
+  extra?: Record<string, unknown>;
+}
+
+/** One facilitator the agent may settle through. */
+export interface FacilitatorOption {
+  name: string;
+  url: string;
+  spec_version: string;
+}
+
+/**
+ * Response body for an HTTP 402 issued by a Xenarch-protected resource.
+ *
+ * Post-XEN-179: no `splitter`, no `collector`. Payment goes directly from
+ * the agent's facilitator to `seller_wallet`. The agent picks a facilitator
+ * from `facilitators` (or its own preference list — see {@link Router}) to
+ * settle through.
+ */
 export interface GateResponse {
-  xenarch: boolean;
+  xenarch: true;
   gate_id: string;
   price_usd: string;
-  splitter: string;
-  collector: string;
+  seller_wallet: string;
   network: string;
   asset: string;
   protocol: string;
+  facilitators: FacilitatorOption[];
+  accepts: PaymentRequirements[];
   verify_url: string;
   expires: string;
 }
@@ -54,9 +90,19 @@ export interface GateVerifyRequest {
   tx_hash: string;
 }
 
-export interface GateVerifyResponse {
-  access_token: string;
-  expires_at: string;
+/**
+ * Response from POST /v1/gates/{id}/verify.
+ *
+ * Post-XEN-179: no access token. The platform returns the verified payment
+ * record; subsequent gated requests carry `gate_id` + `tx_hash` so the
+ * publisher edge can re-verify statelessly.
+ */
+export interface VerifiedPaymentResponse {
+  gate_id: string;
+  status: string; // "paid"
+  tx_hash: string;
+  amount_usd: string;
+  verified_at: string;
 }
 
 export interface GateStatusResponse {
@@ -117,23 +163,38 @@ export interface PayoutUpdateResponse {
   effective_at: string;
 }
 
-// --- Token Cache ---
+// --- Payment History Cache ---
 
-export interface CachedToken {
+/**
+ * One entry in the local payment history cache.
+ *
+ * Post-XEN-179: no access token. Cached entries record the on-chain tx
+ * hash so the user can replay {@link GateResponse.gate_id} +
+ * {@link CachedPayment.tx_hash} headers against the same URL until the
+ * publisher's verification window closes.
+ */
+export interface CachedPayment {
   url: string;
   gate_id: string;
   price_usd: string;
   tx_hash: string;
-  access_token: string;
-  expires_at: string;
+  facilitator: string;
   paid_at: string;
 }
 
 // --- Payment ---
 
+/**
+ * Result of a successful settle through a third-party x402 facilitator.
+ *
+ * The caller is responsible for replaying the URL with
+ * `X-Xenarch-Gate-Id` + `X-Xenarch-Tx-Hash` headers — see the pay command.
+ */
 export interface PaymentResult {
-  txHash: string;
-  blockNumber: number;
+  tx_hash: string;
+  facilitator: string;
+  gate_id: string;
+  amount_usd: string;
 }
 
 // --- Pay.json ---
@@ -150,14 +211,19 @@ export interface PayJsonPricing {
 
 export const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
-export const SPLITTER_ABI = [
-  "function split(address collector, uint256 amount) external",
-  "event Split(address indexed collector, uint256 gross, uint256 fee, uint256 net)",
-] as const;
-
 export const USDC_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
   "function allowance(address owner, address spender) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
   "function decimals() view returns (uint8)",
 ] as const;
+
+// --- Replay headers (post-XEN-179) ---
+
+/**
+ * Canonical Xenarch replay headers. Lowercase comparison only — fetch
+ * normalises header casing and the publisher middleware reads them
+ * lowercase too.
+ */
+export const GATE_ID_HEADER = "X-Xenarch-Gate-Id";
+export const TX_HASH_HEADER = "X-Xenarch-Tx-Hash";

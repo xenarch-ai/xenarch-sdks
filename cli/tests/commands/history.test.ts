@@ -38,27 +38,19 @@ describe("history command logic", () => {
     expect(entries[0].paid_at).toBeDefined();
   });
 
-  it("shows valid/expired status correctly", async () => {
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-
+  it("preserves multiple entries in insertion order", async () => {
     await cacheToken(
-      mockCachedToken({ url: "https://a.com/valid", expires_at: future }),
+      mockCachedToken({ url: "https://a.com/first", gate_id: "gate_a" }),
       tmpDir,
     );
     await cacheToken(
-      mockCachedToken({ url: "https://b.com/expired", expires_at: past }),
+      mockCachedToken({ url: "https://b.com/second", gate_id: "gate_b" }),
       tmpDir,
     );
 
     const entries = await loadCache(tmpDir);
     expect(entries).toHaveLength(2);
-
-    const now = new Date();
-    const validEntry = entries.find((e) => e.url.includes("valid"))!;
-    const expiredEntry = entries.find((e) => e.url.includes("expired"))!;
-
-    expect(new Date(validEntry.expires_at) > now).toBe(true);
-    expect(new Date(expiredEntry.expires_at) > now).toBe(false);
+    expect(entries[0].url).toBe("https://a.com/first");
+    expect(entries[1].url).toBe("https://b.com/second");
   });
 });

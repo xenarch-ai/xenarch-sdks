@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import {
   loadCache,
   cacheToken,
-  getValidToken,
+  getRecentPayment,
 } from "../../src/lib/token-cache.js";
 import { mockCachedToken } from "../fixtures/mock-responses.js";
 
@@ -45,40 +45,29 @@ describe("cacheToken", () => {
   });
 });
 
-describe("getValidToken", () => {
-  it("returns valid cached token for matching URL", () => {
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const entries = [mockCachedToken({ url: "https://a.com/1", expires_at: future })];
+describe("getRecentPayment", () => {
+  it("returns most recent payment for matching URL", () => {
+    const entries = [mockCachedToken({ url: "https://a.com/1" })];
 
-    const result = getValidToken(entries, "https://a.com/1");
+    const result = getRecentPayment(entries, "https://a.com/1");
     expect(result).not.toBeNull();
     expect(result!.url).toBe("https://a.com/1");
   });
 
-  it("returns null for expired token", () => {
-    const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const entries = [mockCachedToken({ url: "https://a.com/1", expires_at: past })];
-
-    const result = getValidToken(entries, "https://a.com/1");
-    expect(result).toBeNull();
-  });
-
   it("returns null for non-matching URL", () => {
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const entries = [mockCachedToken({ url: "https://a.com/1", expires_at: future })];
+    const entries = [mockCachedToken({ url: "https://a.com/1" })];
 
-    const result = getValidToken(entries, "https://b.com/2");
+    const result = getRecentPayment(entries, "https://b.com/2");
     expect(result).toBeNull();
   });
 
-  it("returns most recent valid token when multiple exist", () => {
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  it("returns most recent entry when multiple exist for same URL", () => {
     const entries = [
-      mockCachedToken({ url: "https://a.com/1", access_token: "old", expires_at: future }),
-      mockCachedToken({ url: "https://a.com/1", access_token: "new", expires_at: future }),
+      mockCachedToken({ url: "https://a.com/1", tx_hash: "0x" + "11".repeat(32) }),
+      mockCachedToken({ url: "https://a.com/1", tx_hash: "0x" + "22".repeat(32) }),
     ];
 
-    const result = getValidToken(entries, "https://a.com/1");
-    expect(result!.access_token).toBe("new");
+    const result = getRecentPayment(entries, "https://a.com/1");
+    expect(result!.tx_hash).toBe("0x" + "22".repeat(32));
   });
 });

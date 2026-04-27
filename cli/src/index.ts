@@ -16,7 +16,7 @@ export function createProgram(): Command {
   program
     .name("xenarch")
     .description("CLI for the Xenarch payment network")
-    .version("0.1.0")
+    .version("0.3.0")
     .option("--json", "Output in JSON format")
     .option("--api-base <url>", "Override API base URL")
     .option("--rpc-url <url>", "Override Base RPC URL");

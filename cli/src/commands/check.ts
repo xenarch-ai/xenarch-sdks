@@ -38,14 +38,17 @@ export function registerCheckCommand(program: Command): void {
 
         if (result.gated && result.gate) {
           const g = result.gate;
+          const facilitatorList = g.facilitators
+            .map((f) => `${f.name} (${f.url})`)
+            .join("\n               ");
           console.log(`${green("Gate detected")} on ${url}
 
-  ${bold("Gate ID:")}    ${g.gate_id}
-  ${bold("Price:")}      $${g.price_usd} ${g.asset}
-  ${bold("Network:")}    ${g.network}
-  ${bold("Splitter:")}   ${g.splitter}
-  ${bold("Collector:")}  ${g.collector}
-  ${bold("Expires:")}    ${g.expires}
+  ${bold("Gate ID:")}     ${g.gate_id}
+  ${bold("Price:")}       $${g.price_usd} ${g.asset}
+  ${bold("Network:")}     ${g.network}
+  ${bold("Seller:")}      ${g.seller_wallet}
+  ${bold("Facilitators:")} ${facilitatorList || "(none advertised)"}
+  ${bold("Expires:")}     ${g.expires}
 
 Run ${cyan(`xenarch pay ${url}`)} to pay and access.`);
         } else {

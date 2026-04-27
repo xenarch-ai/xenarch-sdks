@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { loadCache } from "../lib/token-cache.js";
-import { bold, green, red, dim, formatTable } from "../lib/output.js";
+import { bold, formatTable } from "../lib/output.js";
 
 export function registerHistoryCommand(program: Command): void {
   program
@@ -26,21 +26,24 @@ export function registerHistoryCommand(program: Command): void {
           return;
         }
 
-        const now = new Date();
+        // Post-XEN-179: no access tokens, no expiry. The history is just
+        // an audit trail of on-chain settlements.
         const rows = entries
           .slice()
           .reverse()
           .map((e) => {
-            const isValid = new Date(e.expires_at) > now;
-            const status = isValid ? green("valid") : red("expired");
-            const date = new Date(e.paid_at).toISOString().slice(0, 16).replace("T", " ");
-            return [e.url, `$${e.price_usd}`, status, date];
+            const date = new Date(e.paid_at)
+              .toISOString()
+              .slice(0, 16)
+              .replace("T", " ");
+            const txShort = `${e.tx_hash.slice(0, 10)}…${e.tx_hash.slice(-6)}`;
+            return [e.url, `$${e.price_usd}`, txShort, date];
           });
 
         console.log(`${bold("Recent payments:")}\n`);
         console.log(
           "  " +
-            formatTable(["URL", "Price", "Status", "Date"], rows).replace(
+            formatTable(["URL", "Price", "Tx", "Date"], rows).replace(
               /\n/g,
               "\n  ",
             ),

@@ -1,9 +1,8 @@
 import type {
   GateResponse,
-  GateVerifyResponse,
+  VerifiedPaymentResponse,
   GateStatusResponse,
   AgentRegisterResponse,
-  ApiError,
   PayJsonPricing,
   PublisherRegisterResponse,
   SiteCreateResponse,
@@ -11,6 +10,7 @@ import type {
   SiteStatsResponse,
   PayoutUpdateResponse,
 } from "../types.js";
+import { GATE_ID_HEADER, TX_HASH_HEADER } from "../types.js";
 
 export interface PlatformConfig {
   wc_project_id: string;
@@ -20,7 +20,7 @@ export async function fetchPlatformConfig(
   apiBase: string,
 ): Promise<PlatformConfig> {
   const res = await fetch(`${apiBase}/v1/config`, {
-    headers: { "User-Agent": "xenarch-cli/0.1.0" },
+    headers: { "User-Agent": "xenarch-cli/0.3.0" },
   });
 
   if (!res.ok) {
@@ -48,7 +48,7 @@ export async function fetchGate(url: string): Promise<FetchGateResult> {
   const res = await fetch(url, {
     redirect: "follow",
     headers: {
-      "User-Agent": "xenarch-cli/0.1.0",
+      "User-Agent": "xenarch-cli/0.3.0",
     },
   });
 
@@ -64,10 +64,18 @@ export async function fetchGate(url: string): Promise<FetchGateResult> {
   return { gated: true, gate: body as GateResponse };
 }
 
+/**
+ * Eagerly re-verify an on-chain payment with the Xenarch platform.
+ *
+ * Post-XEN-179: returns the {@link VerifiedPaymentResponse} record (no
+ * access token). Calling this is optional — most agents just replay the
+ * gated URL with `X-Xenarch-Gate-Id` + `X-Xenarch-Tx-Hash` headers and
+ * let the publisher's middleware verify behind the scenes.
+ */
 export async function verifyPayment(
   verifyUrl: string,
   txHash: string,
-): Promise<GateVerifyResponse> {
+): Promise<VerifiedPaymentResponse> {
   const res = await fetch(verifyUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -78,7 +86,29 @@ export async function verifyPayment(
     throw new Error(`Payment verification failed: ${await errorMessage(res)}`);
   }
 
-  return (await res.json()) as GateVerifyResponse;
+  return (await res.json()) as VerifiedPaymentResponse;
+}
+
+/**
+ * Replay a gated URL with the canonical Xenarch V2 headers.
+ *
+ * The publisher's middleware reads {@link GATE_ID_HEADER} +
+ * {@link TX_HASH_HEADER} (case-insensitive) and stateless-verifies the
+ * payment before serving the content.
+ */
+export async function fetchWithReplay(
+  url: string,
+  gateId: string,
+  txHash: string,
+): Promise<Response> {
+  return fetch(url, {
+    redirect: "follow",
+    headers: {
+      "User-Agent": "xenarch-cli/0.3.0",
+      [GATE_ID_HEADER]: gateId,
+      [TX_HASH_HEADER]: txHash,
+    },
+  });
 }
 
 export async function getGateStatus(
@@ -121,7 +151,7 @@ export async function fetchPayJson(
   try {
     const origin = new URL(originUrl).origin;
     const res = await fetch(`${origin}/.well-known/pay.json`, {
-      headers: { "User-Agent": "xenarch-cli/0.1.0" },
+      headers: { "User-Agent": "xenarch-cli/0.3.0" },
     });
 
     if (!res.ok) return null;

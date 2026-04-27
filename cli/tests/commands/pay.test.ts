@@ -14,7 +14,7 @@ import {
 // since the command itself orchestrates them
 
 import { fetchGate, verifyPayment } from "../../src/lib/api.js";
-import { getValidToken } from "../../src/lib/token-cache.js";
+import { getRecentPayment } from "../../src/lib/token-cache.js";
 
 const originalFetch = globalThis.fetch;
 let tmpDir: string;
@@ -33,15 +33,12 @@ afterEach(async () => {
 });
 
 describe("pay command logic", () => {
-  it("detects cached token and skips payment", () => {
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const entries = [
-      mockCachedToken({ url: "https://example.com/paid", expires_at: future }),
-    ];
+  it("detects cached payment and skips re-paying", () => {
+    const entries = [mockCachedToken({ url: "https://example.com/paid" })];
 
-    const cached = getValidToken(entries, "https://example.com/paid");
+    const cached = getRecentPayment(entries, "https://example.com/paid");
     expect(cached).not.toBeNull();
-    expect(cached!.access_token).toBeDefined();
+    expect(cached!.tx_hash).toBeDefined();
   });
 
   it("max-price check rejects expensive gates", async () => {
@@ -56,7 +53,7 @@ describe("pay command logic", () => {
     expect(price).toBeGreaterThan(maxPrice);
   });
 
-  it("verification returns access token", async () => {
+  it("verification returns the verified payment record", async () => {
     const verifyResp = mockVerifyResponse();
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(verifyResp));
 
@@ -64,8 +61,8 @@ describe("pay command logic", () => {
       "https://xenarch.dev/v1/gates/gate_1/verify",
       "0x" + "ab".repeat(32),
     );
-    expect(result.access_token).toBe(verifyResp.access_token);
-    expect(result.expires_at).toBeDefined();
+    expect(result.tx_hash).toBe(verifyResp.tx_hash);
+    expect(result.status).toBe("paid");
   });
 
   it("detects non-gated URL", async () => {

@@ -5,7 +5,8 @@
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http";
-import type { GateResponse, GateVerifyResponse, GateStatusResponse, AgentRegisterResponse, PayJsonPricing } from "../../src/types.js";
+import type { GateResponse, VerifiedPaymentResponse, GateStatusResponse, AgentRegisterResponse, PayJsonPricing } from "../../src/types.js";
+import { USDC_BASE } from "../../src/types.js";
 import type { AddressInfo } from "node:net";
 
 export interface RecordedRequest {
@@ -19,8 +20,7 @@ export interface TestServerOptions {
   gatePrice?: string;
   gateExpires?: string;
   gateId?: string;
-  splitter?: string;
-  collector?: string;
+  sellerWallet?: string;
   payJson?: PayJsonPricing | null;
   /** When false, POST /v1/gates/:id/verify returns 402 failure */
   verifySucceeds?: boolean;
@@ -37,8 +37,7 @@ export class TestServer {
       gatePrice: opts.gatePrice ?? "0.0030",
       gateExpires: opts.gateExpires ?? new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       gateId: opts.gateId ?? "gate_test_001",
-      splitter: opts.splitter ?? "0x1111111111111111111111111111111111111111",
-      collector: opts.collector ?? "0x2222222222222222222222222222222222222222",
+      sellerWallet: opts.sellerWallet ?? "0x3333333333333333333333333333333333333333",
       payJson: opts.payJson === undefined ? { default_price_usd: 0.003, rules: [{ path: "/premium/*", price_usd: 0.01 }] } : opts.payJson,
       verifySucceeds: opts.verifySucceeds ?? true,
     };
@@ -65,20 +64,40 @@ export class TestServer {
       xenarch: true,
       gate_id: this.options.gateId,
       price_usd: this.options.gatePrice,
-      splitter: this.options.splitter,
-      collector: this.options.collector,
+      seller_wallet: this.options.sellerWallet,
       network: "base",
       asset: "USDC",
       protocol: "x402",
+      facilitators: [
+        { name: "PayAI", url: "https://facilitator.payai.network", spec_version: "v2" },
+        { name: "xpay", url: "https://facilitator.xpay.dev", spec_version: "v2" },
+      ],
+      accepts: [
+        {
+          scheme: "exact",
+          network: "base",
+          maxAmountRequired: String(Math.round(parseFloat(this.options.gatePrice) * 1_000_000)),
+          resource: `${this.baseUrl}/gated`,
+          description: "Gated test resource",
+          mimeType: "text/html",
+          payTo: this.options.sellerWallet,
+          maxTimeoutSeconds: 60,
+          asset: USDC_BASE,
+          extra: {},
+        },
+      ],
       verify_url: `${this.baseUrl}/v1/gates/${this.options.gateId}/verify`,
       expires: this.options.gateExpires,
     };
   }
 
-  private verifyResponse(): GateVerifyResponse {
+  private verifyResponse(): VerifiedPaymentResponse {
     return {
-      access_token: "eyJhbGciOiJIUzI1NiJ9.integration-test-token",
-      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      gate_id: this.options.gateId,
+      status: "paid",
+      tx_hash: "0x" + "ab".repeat(32),
+      amount_usd: this.options.gatePrice,
+      verified_at: new Date().toISOString(),
     };
   }
 

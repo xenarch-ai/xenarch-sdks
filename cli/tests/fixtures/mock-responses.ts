@@ -1,14 +1,46 @@
 import type {
   GateResponse,
-  GateVerifyResponse,
+  VerifiedPaymentResponse,
   GateStatusResponse,
-  CachedToken,
+  CachedPayment,
+  PaymentRequirements,
+  FacilitatorOption,
   PublisherRegisterResponse,
   SiteCreateResponse,
   SiteListItem,
   SiteStatsResponse,
   PayoutUpdateResponse,
 } from "../../src/types.js";
+import { USDC_BASE } from "../../src/types.js";
+
+export const TEST_SELLER = "0x3333333333333333333333333333333333333333";
+
+export function mockFacilitators(): FacilitatorOption[] {
+  return [
+    { name: "PayAI", url: "https://facilitator.payai.network", spec_version: "v2" },
+    { name: "xpay", url: "https://facilitator.xpay.dev", spec_version: "v2" },
+  ];
+}
+
+export function mockAccepts(
+  overrides: Partial<PaymentRequirements> = {},
+): PaymentRequirements[] {
+  return [
+    {
+      scheme: "exact",
+      network: "base",
+      maxAmountRequired: "3000",
+      resource: "https://example.com/article/xyz",
+      description: "Gated article",
+      mimeType: "text/html",
+      payTo: TEST_SELLER,
+      maxTimeoutSeconds: 60,
+      asset: USDC_BASE,
+      extra: {},
+      ...overrides,
+    },
+  ];
+}
 
 export function mockGateResponse(
   overrides: Partial<GateResponse> = {},
@@ -17,11 +49,12 @@ export function mockGateResponse(
     xenarch: true,
     gate_id: "gate_7f3a0001",
     price_usd: "0.0030",
-    splitter: "0x1111111111111111111111111111111111111111",
-    collector: "0x2222222222222222222222222222222222222222",
+    seller_wallet: TEST_SELLER,
     network: "base",
     asset: "USDC",
     protocol: "x402",
+    facilitators: mockFacilitators(),
+    accepts: mockAccepts(),
     verify_url: "https://xenarch.dev/v1/gates/gate_7f3a0001/verify",
     expires: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     ...overrides,
@@ -29,11 +62,14 @@ export function mockGateResponse(
 }
 
 export function mockVerifyResponse(
-  overrides: Partial<GateVerifyResponse> = {},
-): GateVerifyResponse {
+  overrides: Partial<VerifiedPaymentResponse> = {},
+): VerifiedPaymentResponse {
   return {
-    access_token: "eyJhbGciOiJIUzI1NiJ9.test-token",
-    expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    gate_id: "gate_7f3a0001",
+    status: "paid",
+    tx_hash: "0x" + "ab".repeat(32),
+    amount_usd: "0.0030",
+    verified_at: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -52,15 +88,14 @@ export function mockGateStatusResponse(
 }
 
 export function mockCachedToken(
-  overrides: Partial<CachedToken> = {},
-): CachedToken {
+  overrides: Partial<CachedPayment> = {},
+): CachedPayment {
   return {
     url: "https://example.com/article/xyz",
     gate_id: "gate_7f3a0001",
     price_usd: "0.003",
     tx_hash: "0x" + "ab".repeat(32),
-    access_token: "eyJhbGciOiJIUzI1NiJ9.test-token",
-    expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    facilitator: "https://facilitator.payai.network",
     paid_at: new Date().toISOString(),
     ...overrides,
   };
