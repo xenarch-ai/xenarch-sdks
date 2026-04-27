@@ -51,7 +51,7 @@ describe("fetchGate", () => {
 });
 
 describe("verifyPayment", () => {
-  it("returns access token on success", async () => {
+  it("returns the verified payment record on success", async () => {
     const verifyResp = mockVerifyResponse();
     vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(verifyResp));
 
@@ -59,7 +59,8 @@ describe("verifyPayment", () => {
       "https://xenarch.dev/v1/gates/gate_1/verify",
       "0x" + "ab".repeat(32),
     );
-    expect(result.access_token).toBe(verifyResp.access_token);
+    expect(result.tx_hash).toBe(verifyResp.tx_hash);
+    expect(result.status).toBe("paid");
   });
 
   it("throws on verification failure", async () => {

@@ -31,7 +31,7 @@ vi.mock("../../src/lib/token-cache.js", async (importOriginal) => {
   return {
     ...actual,
     loadCache: () => actual.loadCache(tmpDir),
-    cacheToken: (entry: import("../../src/types.js").CachedToken) => actual.cacheToken(entry, tmpDir),
+    cacheToken: (entry: import("../../src/types.js").CachedPayment) => actual.cacheToken(entry, tmpDir),
   };
 });
 

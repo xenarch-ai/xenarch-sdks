@@ -25,7 +25,9 @@ describe("fetchGate (real HTTP)", () => {
     expect(result.gate!.network).toBe("base");
     expect(result.gate!.asset).toBe("USDC");
     expect(result.gate!.protocol).toBe("x402");
-    expect(result.gate!.splitter).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(result.gate!.seller_wallet).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(result.gate!.facilitators.length).toBeGreaterThan(0);
+    expect(result.gate!.accepts.length).toBeGreaterThan(0);
     expect(result.gate!.verify_url).toBe(`${server.baseUrl}/v1/gates/gate_test_001/verify`);
   });
 
@@ -43,13 +45,13 @@ describe("fetchGate (real HTTP)", () => {
     expect(result.gate).toBeNull();
   });
 
-  it("sends correct User-Agent header", async () => {
+  it("sends a User-Agent header", async () => {
     server.clearRequests();
     await fetchGate(`${server.baseUrl}/gated`);
 
     const req = server.requests.find((r) => r.url === "/gated");
     expect(req).toBeDefined();
-    expect(req!.headers["user-agent"]).toBe("xenarch-cli/0.1.0");
+    expect(String(req!.headers["user-agent"])).toMatch(/^xenarch-cli\//);
   });
 
   it("returns not gated on server error (500)", async () => {
@@ -59,16 +61,17 @@ describe("fetchGate (real HTTP)", () => {
 });
 
 describe("verifyPayment (real HTTP)", () => {
-  it("returns access token from real verify endpoint", async () => {
+  it("returns the verified payment record from real verify endpoint", async () => {
     const txHash = "0x" + "ab".repeat(32);
     const result = await verifyPayment(
       `${server.baseUrl}/v1/gates/gate_test_001/verify`,
       txHash,
     );
 
-    expect(result.access_token).toBe("eyJhbGciOiJIUzI1NiJ9.integration-test-token");
-    expect(result.expires_at).toBeDefined();
-    expect(new Date(result.expires_at).getTime()).toBeGreaterThan(Date.now());
+    expect(result.gate_id).toBe("gate_test_001");
+    expect(result.status).toBe("paid");
+    expect(result.tx_hash).toBeDefined();
+    expect(result.verified_at).toBeDefined();
   });
 
   it("sends correct Content-Type and body", async () => {
@@ -198,13 +201,13 @@ describe("fetchPayJson (real HTTP)", () => {
     }
   });
 
-  it("sends correct User-Agent header", async () => {
+  it("sends a User-Agent header", async () => {
     server.clearRequests();
     await fetchPayJson(`${server.baseUrl}/page`);
 
     const req = server.requests.find((r) => r.url === "/.well-known/pay.json");
     expect(req).toBeDefined();
-    expect(req!.headers["user-agent"]).toBe("xenarch-cli/0.1.0");
+    expect(String(req!.headers["user-agent"])).toMatch(/^xenarch-cli\//);
   });
 });
 

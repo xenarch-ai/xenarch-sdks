@@ -31,7 +31,7 @@ describe("check command (real HTTP)", () => {
     expect(output).toContain("Gate detected");
     expect(output).toContain("gate_test_001");
     expect(output).toContain("0.0030");
-    expect(output).toContain("0x1111111111111111111111111111111111111111");
+    expect(output).toContain("0x3333333333333333333333333333333333333333");
   });
 
   it("reports non-gated URL", async () => {

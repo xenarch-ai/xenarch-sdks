@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { cacheToken, loadCache, getValidToken } from "../../src/lib/token-cache.js";
-import type { CachedToken } from "../../src/types.js";
+import { cacheToken, loadCache, getRecentPayment } from "../../src/lib/token-cache.js";
+import type { CachedPayment } from "../../src/types.js";
 
 let tmpDir: string;
 
@@ -15,14 +15,13 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-function makeToken(overrides: Partial<CachedToken> = {}): CachedToken {
+function makeToken(overrides: Partial<CachedPayment> = {}): CachedPayment {
   return {
     url: "https://example.com/article/1",
     gate_id: "gate_test_001",
     price_usd: "0.003",
     tx_hash: "0x" + "ab".repeat(32),
-    access_token: "eyJhbGciOiJIUzI1NiJ9.test-token",
-    expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    facilitator: "https://facilitator.payai.network",
     paid_at: new Date().toISOString(),
     ...overrides,
   };
@@ -47,13 +46,13 @@ describe("history from real cache files", () => {
     expect(entries).toEqual([]);
   });
 
-  it("preserves all token fields through write/read cycle", async () => {
+  it("preserves all fields through write/read cycle", async () => {
     const token = makeToken({
       url: "https://example.com/specific",
       gate_id: "gate_specific_123",
       price_usd: "0.0050",
       tx_hash: "0x" + "cd".repeat(32),
-      access_token: "specific-token-value",
+      facilitator: "https://facilitator.xpay.dev",
     });
 
     await cacheToken(token, tmpDir);
@@ -63,98 +62,45 @@ describe("history from real cache files", () => {
     expect(entries[0].gate_id).toBe(token.gate_id);
     expect(entries[0].price_usd).toBe(token.price_usd);
     expect(entries[0].tx_hash).toBe(token.tx_hash);
-    expect(entries[0].access_token).toBe(token.access_token);
-    expect(entries[0].expires_at).toBe(token.expires_at);
+    expect(entries[0].facilitator).toBe(token.facilitator);
     expect(entries[0].paid_at).toBe(token.paid_at);
   });
 });
 
-describe("getValidToken against real cache files", () => {
-  it("finds valid token by URL from real cache data", async () => {
-    const token = makeToken({
-      url: "https://example.com/target",
-      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    });
+describe("getRecentPayment against real cache files", () => {
+  it("finds payment by URL from real cache data", async () => {
+    const token = makeToken({ url: "https://example.com/target" });
     await cacheToken(token, tmpDir);
 
     const entries = await loadCache(tmpDir);
-    const result = getValidToken(entries, "https://example.com/target");
+    const result = getRecentPayment(entries, "https://example.com/target");
     expect(result).not.toBeNull();
     expect(result!.url).toBe("https://example.com/target");
-    expect(result!.access_token).toBe(token.access_token);
+    expect(result!.tx_hash).toBe(token.tx_hash);
   });
 
-  it("returns null for expired token from real cache data", async () => {
-    const token = makeToken({
-      url: "https://example.com/expired-target",
-      expires_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    });
+  it("returns null when URL is absent", async () => {
+    const token = makeToken({ url: "https://example.com/absent-key" });
     await cacheToken(token, tmpDir);
 
     const entries = await loadCache(tmpDir);
-    const result = getValidToken(entries, "https://example.com/expired-target");
+    const result = getRecentPayment(entries, "https://example.com/other");
     expect(result).toBeNull();
   });
 
-  it("returns most recent valid token when multiple exist in real cache", async () => {
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    await cacheToken(makeToken({ url: "https://example.com/multi", access_token: "old-token", expires_at: future }), tmpDir);
-    await cacheToken(makeToken({ url: "https://example.com/multi", access_token: "new-token", expires_at: future }), tmpDir);
+  it("returns most recent entry when multiple exist for same URL", async () => {
+    await cacheToken(
+      makeToken({ url: "https://example.com/multi", tx_hash: "0x" + "11".repeat(32) }),
+      tmpDir,
+    );
+    await cacheToken(
+      makeToken({ url: "https://example.com/multi", tx_hash: "0x" + "22".repeat(32) }),
+      tmpDir,
+    );
 
     const entries = await loadCache(tmpDir);
-    const result = getValidToken(entries, "https://example.com/multi");
-    expect(result!.access_token).toBe("new-token");
-  });
-});
-
-describe("valid/expired status based on real timestamps", () => {
-  it("identifies valid token (future expiry)", async () => {
-    const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const token = makeToken({ expires_at: futureExpiry });
-
-    await cacheToken(token, tmpDir);
-    const entries = await loadCache(tmpDir);
-
-    const now = new Date();
-    const isValid = new Date(entries[0].expires_at) > now;
-    expect(isValid).toBe(true);
-  });
-
-  it("identifies expired token (past expiry)", async () => {
-    const pastExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const token = makeToken({ expires_at: pastExpiry });
-
-    await cacheToken(token, tmpDir);
-    const entries = await loadCache(tmpDir);
-
-    const now = new Date();
-    const isValid = new Date(entries[0].expires_at) > now;
-    expect(isValid).toBe(false);
-  });
-
-  it("handles mix of valid and expired entries", async () => {
-    const valid = makeToken({
-      url: "https://example.com/valid",
-      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    });
-    const expired = makeToken({
-      url: "https://example.com/expired",
-      expires_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    });
-
-    await cacheToken(valid, tmpDir);
-    await cacheToken(expired, tmpDir);
-
-    const entries = await loadCache(tmpDir);
-    const now = new Date();
-
-    const validEntries = entries.filter((e) => new Date(e.expires_at) > now);
-    const expiredEntries = entries.filter((e) => new Date(e.expires_at) <= now);
-
-    expect(validEntries).toHaveLength(1);
-    expect(validEntries[0].url).toBe("https://example.com/valid");
-    expect(expiredEntries).toHaveLength(1);
-    expect(expiredEntries[0].url).toBe("https://example.com/expired");
+    const result = getRecentPayment(entries, "https://example.com/multi");
+    expect(result!.tx_hash).toBe("0x" + "22".repeat(32));
   });
 });
 
@@ -171,16 +117,13 @@ describe("cache file permissions", () => {
 });
 
 describe("history command end-to-end", () => {
-  // These tests use vi.mock to redirect the history command's loadCache to tmpDir
   it("shows payment entries from real cache", async () => {
     const token = makeToken({
       url: "https://example.com/paid-article",
       price_usd: "0.005",
-      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     });
     await cacheToken(token, tmpDir);
 
-    // Dynamically import with mock to redirect loadCache
     vi.doMock("../../src/lib/token-cache.js", async (importOriginal) => {
       const actual = await importOriginal<typeof import("../../src/lib/token-cache.js")>();
       return { ...actual, loadCache: () => actual.loadCache(tmpDir) };

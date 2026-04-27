@@ -1,8 +1,22 @@
+/**
+ * Local payment history cache.
+ *
+ * Post-XEN-179: there are no access tokens to cache — the publisher's
+ * middleware re-verifies on every replay. This cache is now purely an
+ * audit log of what the user has paid for, surfaced via `xenarch history`,
+ * plus a way for `xenarch pay` to short-circuit when the user already
+ * has a recent on-chain receipt for the same URL.
+ *
+ * The on-disk filename is still `token-cache.json` for backwards
+ * compatibility with existing installs (the entries are pruned/replaced
+ * lazily on next write).
+ */
+
 import { readFile, writeFile, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { ensureConfigDir } from "./config.js";
-import type { CachedToken } from "../types.js";
+import type { CachedPayment } from "../types.js";
 
 const MAX_ENTRIES = 1000;
 
@@ -14,10 +28,10 @@ function cachePath(configDir?: string): string {
   return join(configDir ?? defaultConfigDir(), "token-cache.json");
 }
 
-export async function loadCache(configDir?: string): Promise<CachedToken[]> {
+export async function loadCache(configDir?: string): Promise<CachedPayment[]> {
   try {
     const raw = await readFile(cachePath(configDir), "utf-8");
-    return JSON.parse(raw) as CachedToken[];
+    return JSON.parse(raw) as CachedPayment[];
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return [];
@@ -27,7 +41,7 @@ export async function loadCache(configDir?: string): Promise<CachedToken[]> {
 }
 
 export async function saveCache(
-  entries: CachedToken[],
+  entries: CachedPayment[],
   configDir?: string,
 ): Promise<void> {
   await ensureConfigDir(configDir);
@@ -37,54 +51,28 @@ export async function saveCache(
 }
 
 export async function cacheToken(
-  entry: CachedToken,
+  entry: CachedPayment,
   configDir?: string,
 ): Promise<void> {
   let entries = await loadCache(configDir);
   entries.push(entry);
-
-  // Evict if over max
   if (entries.length > MAX_ENTRIES) {
-    entries = evict(entries);
+    entries = entries.slice(entries.length - MAX_ENTRIES);
   }
-
   await saveCache(entries, configDir);
 }
 
-export function getValidToken(
-  entries: CachedToken[],
+/**
+ * Most recent cached payment for `url`, or null. Used by `xenarch pay`
+ * to skip re-paying a URL the user already settled — the same gate is
+ * still good for replays until the publisher's verification window closes.
+ */
+export function getRecentPayment(
+  entries: CachedPayment[],
   url: string,
-): CachedToken | null {
-  const now = new Date();
-  // Search from end (most recent first)
+): CachedPayment | null {
   for (let i = entries.length - 1; i >= 0; i--) {
-    const e = entries[i];
-    if (e.url === url && new Date(e.expires_at) > now) {
-      return e;
-    }
+    if (entries[i].url === url) return entries[i];
   }
   return null;
-}
-
-function evict(entries: CachedToken[]): CachedToken[] {
-  const now = new Date();
-
-  // Separate expired and valid
-  const expired: CachedToken[] = [];
-  const valid: CachedToken[] = [];
-  for (const e of entries) {
-    if (new Date(e.expires_at) <= now) {
-      expired.push(e);
-    } else {
-      valid.push(e);
-    }
-  }
-
-  // If removing all expired brings us under limit, done
-  if (valid.length <= MAX_ENTRIES) {
-    return valid;
-  }
-
-  // Otherwise, keep the most recent MAX_ENTRIES valid entries
-  return valid.slice(valid.length - MAX_ENTRIES);
 }
