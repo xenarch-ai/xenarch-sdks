@@ -29,19 +29,31 @@ from urllib.parse import urlparse
 
 import httpx
 
-from x402_agent import X402Payer
-from x402_agent._helpers import (
-    AnyPaymentRequirements,
-    X_PAYMENT_HEADER,
-    X_PAYMENT_RESPONSE_HEADER,
-    encode_payment_header,
-    is_public_host,
-    is_public_host_async,
-    price_usd,
-    select_accept,
-    truncate_body,
-)
-from x402.schemas import parse_payment_required
+# x402 stack is an optional dep delivered by the [x402] extra (which the
+# framework extras transitively include). Re-raise as a clear install
+# hint so callers who reach this module without the extra get an
+# actionable error instead of a raw ModuleNotFoundError.
+try:
+    from x402_agent import X402Payer
+    from x402_agent._helpers import (
+        AnyPaymentRequirements,
+        X_PAYMENT_HEADER,
+        X_PAYMENT_RESPONSE_HEADER,
+        encode_payment_header,
+        is_public_host,
+        is_public_host_async,
+        price_usd,
+        select_accept,
+        truncate_body,
+    )
+    from x402.schemas import parse_payment_required
+except ImportError as exc:  # pragma: no cover - install-error path
+    raise ImportError(
+        "xenarch.XenarchPayer requires the x402 extra. Install with: "
+        "pip install 'xenarch[x402]' (or use a framework extra like "
+        "'xenarch[langchain]' / 'xenarch[autogen]' which transitively "
+        "include it)."
+    ) from exc
 
 from xenarch.client import GateResponse
 from xenarch.router import FacilitatorConfig, PaymentContext, Router
