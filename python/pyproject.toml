@@ -41,11 +41,12 @@ Issues = "https://github.com/xenarch-ai/xenarch-sdks/issues"
 [project.optional-dependencies]
 fastapi = ["fastapi>=0.100"]
 langchain = ["langchain-core>=0.2"]
+autogen = ["autogen-core>=0.4"]
 x402 = [
     "x402-agent>=0.1.2,<0.2",
     "pay.json>=1.1,<2",
 ]
-all = ["xenarch[fastapi,langchain,x402]"]
+all = ["xenarch[fastapi,langchain,autogen,x402]"]
 
 [build-system]
 requires = ["hatchling"]
@@ -81,6 +82,7 @@ dev = [
     "hypothesis>=6.100",
     "mypy>=1.11",
     "langchain>=0.2",
+    "autogen-core>=0.4",
     "x402-agent>=0.1.2,<0.2",
     "pay.json>=1.1,<2",
 ]
