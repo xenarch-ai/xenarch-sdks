@@ -2132,12 +2132,16 @@ all = [
 ]
 autogen = [
     { name = "autogen-core" },
+    { name = "pay-json" },
+    { name = "x402-agent" },
 ]
 fastapi = [
     { name = "fastapi" },
 ]
 langchain = [
     { name = "langchain-core" },
+    { name = "pay-json" },
+    { name = "x402-agent" },
 ]
 x402 = [
     { name = "pay-json" },
@@ -2168,8 +2172,10 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0" },
     { name = "x402-agent", marker = "extra == 'x402'", specifier = ">=0.1.2,<0.2" },
     { name = "xenarch", extras = ["fastapi", "langchain", "autogen", "x402"], marker = "extra == 'all'" },
+    { name = "xenarch", extras = ["x402"], marker = "extra == 'autogen'" },
+    { name = "xenarch", extras = ["x402"], marker = "extra == 'langchain'" },
 ]
-provides-extras = ["fastapi", "langchain", "autogen", "x402", "all"]
+provides-extras = ["fastapi", "x402", "langchain", "autogen", "all"]
 
 [package.metadata.requires-dev]
 dev = [

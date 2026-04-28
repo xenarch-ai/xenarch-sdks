@@ -40,12 +40,16 @@ Issues = "https://github.com/xenarch-ai/xenarch-sdks/issues"
 
 [project.optional-dependencies]
 fastapi = ["fastapi>=0.100"]
-langchain = ["langchain-core>=0.2"]
-autogen = ["autogen-core>=0.4"]
+# Framework extras transitively pull x402 because the adapters cannot
+# function without it. `pip install xenarch[langchain]` should give a
+# working LangChain tool out of the box, not a half-installed package
+# that ImportErrors on first use.
 x402 = [
     "x402-agent>=0.1.2,<0.2",
     "pay.json>=1.1,<2",
 ]
+langchain = ["langchain-core>=0.2", "xenarch[x402]"]
+autogen = ["autogen-core>=0.4", "xenarch[x402]"]
 all = ["xenarch[fastapi,langchain,autogen,x402]"]
 
 [build-system]
