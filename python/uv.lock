@@ -2143,6 +2143,10 @@ langchain = [
     { name = "pay-json" },
     { name = "x402-agent" },
 ]
+langgraph = [
+    { name = "pay-json" },
+    { name = "x402-agent" },
+]
 x402 = [
     { name = "pay-json" },
     { name = "x402-agent" },
@@ -2171,11 +2175,12 @@ requires-dist = [
     { name = "pay-json", marker = "extra == 'x402'", specifier = ">=1.1,<2" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "x402-agent", marker = "extra == 'x402'", specifier = ">=0.2,<0.3" },
-    { name = "xenarch", extras = ["fastapi", "langchain", "autogen", "x402"], marker = "extra == 'all'" },
+    { name = "xenarch", extras = ["fastapi", "langchain", "autogen", "langgraph", "x402"], marker = "extra == 'all'" },
     { name = "xenarch", extras = ["x402"], marker = "extra == 'autogen'" },
     { name = "xenarch", extras = ["x402"], marker = "extra == 'langchain'" },
+    { name = "xenarch", extras = ["x402"], marker = "extra == 'langgraph'" },
 ]
-provides-extras = ["fastapi", "x402", "langchain", "autogen", "all"]
+provides-extras = ["fastapi", "x402", "langchain", "autogen", "langgraph", "all"]
 
 [package.metadata.requires-dev]
 dev = [

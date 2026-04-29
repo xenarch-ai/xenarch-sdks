@@ -2,7 +2,12 @@
 
 from ._budget import XenarchBudgetPolicy
 
-__all__ = ["XenarchBudgetPolicy", "XenarchPay", "XenarchAutogenPay"]
+__all__ = [
+    "XenarchBudgetPolicy",
+    "XenarchPay",
+    "XenarchAutogenPay",
+    "XenarchLangGraphPay",
+]
 
 
 def __getattr__(name: str) -> object:
@@ -17,4 +22,8 @@ def __getattr__(name: str) -> object:
         from .autogen import XenarchAutogenPay
 
         return XenarchAutogenPay
+    if name == "XenarchLangGraphPay":
+        from .langgraph import XenarchLangGraphPay
+
+        return XenarchLangGraphPay
     raise AttributeError(f"module 'xenarch.tools' has no attribute {name!r}")

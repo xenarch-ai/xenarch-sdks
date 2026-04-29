@@ -50,7 +50,12 @@ x402 = [
 ]
 langchain = ["langchain-core>=0.2", "xenarch[x402]"]
 autogen = ["autogen-core>=0.4", "xenarch[x402]"]
-all = ["xenarch[fastapi,langchain,autogen,x402]"]
+# LangGraph adapter only needs the payer + an async runtime. We don't
+# import langgraph itself in `tools/langgraph.py` (the node is a plain
+# async callable), so we don't pin a langgraph version here — callers
+# already have it installed if they're wiring graphs.
+langgraph = ["xenarch[x402]"]
+all = ["xenarch[fastapi,langchain,autogen,langgraph,x402]"]
 
 [build-system]
 requires = ["hatchling"]
