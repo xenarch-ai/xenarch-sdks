@@ -6,6 +6,7 @@ __all__ = [
     "XenarchBudgetPolicy",
     "XenarchPay",
     "XenarchAutogenPay",
+    "XenarchCrewaiPay",
     "XenarchLangGraphPay",
 ]
 
@@ -22,6 +23,10 @@ def __getattr__(name: str) -> object:
         from .autogen import XenarchAutogenPay
 
         return XenarchAutogenPay
+    if name == "XenarchCrewaiPay":
+        from .crewai import XenarchCrewaiPay
+
+        return XenarchCrewaiPay
     if name == "XenarchLangGraphPay":
         from .langgraph import XenarchLangGraphPay
 
