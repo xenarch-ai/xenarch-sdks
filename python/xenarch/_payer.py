@@ -37,11 +37,11 @@ try:
     from x402_agent import X402Payer
     from x402_agent._helpers import (
         AnyPaymentRequirements,
-        X_PAYMENT_HEADER,
         X_PAYMENT_RESPONSE_HEADER,
         encode_payment_header,
         is_public_host,
         is_public_host_async,
+        payment_headers,
         price_usd,
         select_accept,
         truncate_body,
@@ -255,11 +255,14 @@ class XenarchPayer(X402Payer):
             if gate_error is not None:
                 return gate_error
 
+            request_header, response_header = payment_headers(
+                payment_required
+            )
             payload = self._x402_sync.create_payment_payload(payment_required)
             header_value = encode_payment_header(payload)
 
             paid = client.get(
-                url, headers={X_PAYMENT_HEADER: header_value}
+                url, headers={request_header: header_value}
             )
 
             if paid.status_code != 200:
@@ -273,7 +276,11 @@ class XenarchPayer(X402Payer):
             self.budget_policy.commit(price)
 
             result = self._success_response(
-                url=url, response=paid, accept=accept, price=price
+                url=url,
+                response=paid,
+                accept=accept,
+                price=price,
+                response_header=response_header,
             )
             self._post_payment_hook(result, paid)
             return result
@@ -318,13 +325,16 @@ class XenarchPayer(X402Payer):
             if gate_error is not None:
                 return gate_error
 
+            request_header, response_header = payment_headers(
+                payment_required
+            )
             payload = await self._x402_async.create_payment_payload(
                 payment_required
             )
             header_value = encode_payment_header(payload)
 
             paid = await client.get(
-                url, headers={X_PAYMENT_HEADER: header_value}
+                url, headers={request_header: header_value}
             )
 
             if paid.status_code != 200:
@@ -338,7 +348,11 @@ class XenarchPayer(X402Payer):
             self.budget_policy.commit(price)
 
             result = self._success_response(
-                url=url, response=paid, accept=accept, price=price
+                url=url,
+                response=paid,
+                accept=accept,
+                price=price,
+                response_header=response_header,
             )
             await self._post_payment_hook_async(result, paid)
             return result

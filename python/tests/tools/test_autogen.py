@@ -29,19 +29,21 @@ def _make_402_body(
     *,
     amount: str = "10000",
     scheme: str = "exact",
-    network: str = "eip155:8453",
+    network: str = "base",
     pay_to: str = "0x0000000000000000000000000000000000000001",
     asset: str = USDC_BASE_ASSET,
+    resource: str = "https://example.com/gated",
 ) -> dict[str, Any]:
     return {
-        "x402Version": 2,
+        "x402Version": 1,
         "error": "payment_required",
         "accepts": [
             {
                 "scheme": scheme,
                 "network": network,
                 "asset": asset,
-                "amount": amount,
+                "maxAmountRequired": amount,
+                "resource": resource,
                 "payTo": pay_to,
                 "maxTimeoutSeconds": 60,
                 "extra": {"name": "USD Coin", "version": "2"},
@@ -147,8 +149,8 @@ class TestHappyPath:
         retry = {k.lower(): v for k, v in seen[1].items()}
         assert "x-payment" in retry
         decoded = json.loads(base64.b64decode(retry["x-payment"]).decode())
-        assert decoded["x402Version"] == 2
-        assert decoded["accepted"]["scheme"] == "exact"
+        assert decoded["x402Version"] == 1
+        assert decoded["scheme"] == "exact"
 
 
 class TestBudgetGate:

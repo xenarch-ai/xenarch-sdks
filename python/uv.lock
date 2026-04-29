@@ -2099,7 +2099,7 @@ evm = [
 
 [[package]]
 name = "x402-agent"
-version = "0.1.2"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eth-account" },
@@ -2107,9 +2107,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "x402", extra = ["evm"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/1f/061a88851dbb30a4bebb4902380d25f9830774a8428b3630f1a560eb16d7/x402_agent-0.1.2.tar.gz", hash = "sha256:c6a50aecac8d47f055aeed0373eaf1b0df3c6c07f197ab41204b4597af2b8c30", size = 123289, upload-time = "2026-04-21T10:03:36.262Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ab/c9/7977451490f02dea0525b29bf2bd0e5a94da93ea17b7ee18a39a68b437e2/x402_agent-0.2.0.tar.gz", hash = "sha256:0c151b9183944aa9af3695e3c4d00c885ecf21448dd2e277a0c3a9a3bc1a24bb", size = 124501, upload-time = "2026-04-23T09:20:07.172Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/98/7e/6897b07829cea7124258eca773f351a75b07d2c45250f0d18ba8a0c88bad/x402_agent-0.1.2-py3-none-any.whl", hash = "sha256:f1775285c64079283e02c492ed57b59d2576ae387eadc0b78d518e8bd94233f0", size = 13977, upload-time = "2026-04-21T10:03:34.315Z" },
+    { url = "https://files.pythonhosted.org/packages/2a/44/98b4bde8a9e5af7ba02e197c45032fbb6db009a40077c3b22833c6e77676/x402_agent-0.2.0-py3-none-any.whl", hash = "sha256:e2663ddb6df7a1525268111f0039862ac04322d43ffed8f70a579f5253316391", size = 14489, upload-time = "2026-04-23T09:20:08.261Z" },
 ]
 
 [[package]]
@@ -2170,7 +2170,7 @@ requires-dist = [
     { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=0.2" },
     { name = "pay-json", marker = "extra == 'x402'", specifier = ">=1.1,<2" },
     { name = "pydantic", specifier = ">=2.0" },
-    { name = "x402-agent", marker = "extra == 'x402'", specifier = ">=0.1.2,<0.2" },
+    { name = "x402-agent", marker = "extra == 'x402'", specifier = ">=0.2,<0.3" },
     { name = "xenarch", extras = ["fastapi", "langchain", "autogen", "x402"], marker = "extra == 'all'" },
     { name = "xenarch", extras = ["x402"], marker = "extra == 'autogen'" },
     { name = "xenarch", extras = ["x402"], marker = "extra == 'langchain'" },
@@ -2187,7 +2187,7 @@ dev = [
     { name = "pay-json", specifier = ">=1.1,<2" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "x402-agent", specifier = ">=0.1.2,<0.2" },
+    { name = "x402-agent", specifier = ">=0.2,<0.3" },
 ]
 
 [[package]]

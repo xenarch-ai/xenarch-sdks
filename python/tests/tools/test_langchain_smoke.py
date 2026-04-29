@@ -28,14 +28,15 @@ USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 
 def _make_402_body() -> dict[str, Any]:
     return {
-        "x402Version": 2,
+        "x402Version": 1,
         "error": "payment_required",
         "accepts": [
             {
                 "scheme": "exact",
-                "network": "eip155:8453",
+                "network": "base",
                 "asset": USDC,
-                "amount": "10000",
+                "maxAmountRequired": "10000",
+                "resource": "https://example.com/gated",
                 "payTo": "0x0000000000000000000000000000000000000001",
                 "maxTimeoutSeconds": 60,
                 "extra": {"name": "USD Coin", "version": "2"},

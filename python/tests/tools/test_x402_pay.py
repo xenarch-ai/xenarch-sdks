@@ -30,26 +30,28 @@ def _make_402_body(
     *,
     amount: str = "10000",
     scheme: str = "exact",
-    network: str = "eip155:8453",
+    network: str = "base",
     pay_to: str = "0x0000000000000000000000000000000000000001",
     asset: str = USDC_BASE_ASSET,
     extra: dict[str, Any] | None = None,
+    resource: str = "https://example.com/gated",
 ) -> dict[str, Any]:
-    # x402 v2 requires a few `extra` fields for EIP-712 domain separator;
-    # populate them with USDC defaults so the SDK's EIP-3009 signer has
-    # everything it needs. Tests that care about an empty `extra` can
-    # still override — passing `extra={}` keeps the empty dict.
+    # x402 V1 wire: ``maxAmountRequired`` (camelCase), ``resource`` is required,
+    # ``network`` uses legacy name strings (e.g. ``base``). EIP-712 domain
+    # separator fields go in ``extra`` (USDC defaults applied below; tests
+    # can override by passing ``extra={}`` or a custom dict).
     default_extra = {"name": "USD Coin", "version": "2"}
     resolved_extra = default_extra if extra is None else extra
     return {
-        "x402Version": 2,
+        "x402Version": 1,
         "error": "payment_required",
         "accepts": [
             {
                 "scheme": scheme,
                 "network": network,
                 "asset": asset,
-                "amount": amount,
+                "maxAmountRequired": amount,
+                "resource": resource,
                 "payTo": pay_to,
                 "maxTimeoutSeconds": 60,
                 "extra": resolved_extra,
@@ -243,9 +245,9 @@ class TestHappyPath:
         decoded = base64.b64decode(header_value).decode("utf-8")
         parsed = json.loads(decoded)
         # x402 v2 payload has x402Version, payload dict, accepted entry.
-        assert parsed["x402Version"] == 2
+        assert parsed["x402Version"] == 1
         assert "payload" in parsed
-        assert parsed["accepted"]["scheme"] == "exact"
+        assert parsed["scheme"] == "exact"
 
     def test_commit_before_any_post_payment_work(
         self, monkeypatch: pytest.MonkeyPatch

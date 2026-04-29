@@ -45,7 +45,7 @@ fastapi = ["fastapi>=0.100"]
 # working LangChain tool out of the box, not a half-installed package
 # that ImportErrors on first use.
 x402 = [
-    "x402-agent>=0.1.2,<0.2",
+    "x402-agent>=0.2,<0.3",
     "pay.json>=1.1,<2",
 ]
 langchain = ["langchain-core>=0.2", "xenarch[x402]"]
@@ -87,6 +87,6 @@ dev = [
     "mypy>=1.11",
     "langchain>=0.2",
     "autogen-core>=0.4",
-    "x402-agent>=0.1.2,<0.2",
+    "x402-agent>=0.2,<0.3",
     "pay.json>=1.1,<2",
 ]
