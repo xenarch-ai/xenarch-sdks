@@ -51,14 +51,15 @@ def _make_402_body(
     *, amount: str = "10000", pay_to: str = "0x0000000000000000000000000000000000000001"
 ) -> dict[str, Any]:
     return {
-        "x402Version": 2,
+        "x402Version": 1,
         "error": "payment_required",
         "accepts": [
             {
                 "scheme": "exact",
-                "network": "eip155:8453",
+                "network": "base",
                 "asset": USDC_BASE_ASSET,
-                "amount": amount,
+                "maxAmountRequired": amount,
+                "resource": "https://example.com/gated",
                 "payTo": pay_to,
                 "maxTimeoutSeconds": 60,
                 "extra": {"name": "USD Coin", "version": "2"},
