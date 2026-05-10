@@ -1,13 +1,44 @@
 {
   "name": "xenarch",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
-  "description": "CLI for interacting with the Xenarch payment network",
+  "description": "CLI for Xenarch — non-custodial x402 MCP server for AI agents. Claude, Cursor, LangChain and CrewAI pay HTTP 402–gated APIs with USDC on Base L2.",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "x402",
+    "http-402",
+    "ai-agent-payments",
+    "claude",
+    "cursor",
+    "langchain",
+    "crewai",
+    "usdc",
+    "base",
+    "base-l2",
+    "non-custodial",
+    "pay-per-crawl",
+    "machine-to-machine-payments",
+    "pay-json",
+    "xenarch"
+  ],
+  "homepage": "https://xenarch.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xenarch-ai/xenarch-sdks",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/xenarch-ai/xenarch-sdks/issues"
+  },
+  "license": "MIT",
   "bin": {
     "xenarch": "./dist/bin/xenarch.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc",
