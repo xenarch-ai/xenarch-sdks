@@ -1,6 +1,6 @@
 # xenarch — CLI for Xenarch's x402 MCP server
 
-Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402–gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement. 0% fee, no contract, facilitator-agnostic.
+Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402–gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement on-chain. 0% Xenarch fee. The agent wallet only ever holds USDC — no ETH, no gas coin needed.
 
 This package is the `xenarch` command-line tool. Use it from a terminal to manage an agent wallet, pay x402-gated URLs by hand, and (for publishers) register sites and check stats against the Xenarch API.
 
