@@ -1,18 +1,18 @@
 # xenarch — Python SDK for Xenarch's x402 MCP server
 
-Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402–gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement on-chain. 0% Xenarch fee — no Xenarch contract in the money flow. The agent wallet only ever holds USDC — no ETH, no other gas coin needed.
+Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402—gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement on-chain. 0% Xenarch fee — no Xenarch contract in the money flow. The agent wallet only ever holds USDC — no ETH, no other gas coin needed.
 
 This package is the Python SDK and FastAPI middleware. Use it to (a) let LangChain / CrewAI / FastAPI agents pay any x402-gated URL, or (b) gate your own FastAPI endpoints behind HTTP 402.
 
 ## Unlike Cloudflare Pay-Per-Crawl / TollBit
 
-| | Cloudflare Pay-Per-Crawl | TollBit | Xenarch |
-|---|---|---|---|
-| Works on any host | ✗ (Cloudflare only) | ✗ (enterprise) | ✓ |
-| Non-custodial | ✗ | ✗ | ✓ (agent-to-publisher direct, no Xenarch contract) |
-| Agent needs ETH | n/a | n/a | ✓ never |
-| Fee | Platform rate | Platform rate | **0% — no Xenarch contract that *can* charge a fee** |
-| Open standard | proprietary | proprietary | x402 + pay.json (open) |
+| | Cloudflare Pay-Per-Crawl | Stripe | TollBit | Xenarch |
+|---|---|---|---|---|
+| Works on any host | × (Cloudflare only) | ✓ | × (enterprise) | ✓ |
+| Non-custodial | × | × | × | ✓ (agent-to-publisher direct, no Xenarch contract) |
+| Agent needs ETH | n/a | n/a | n/a | ✓ never |
+| Fee | Platform rate | 2.9% + $0.30 | Platform rate | **0% — no Xenarch contract that *can* charge a fee** |
+| Open standard | proprietary | proprietary | proprietary | x402 + pay.json (open) |
 
 Settlement happens on-chain via the x402 standard. Xenarch is never in the money flow.
 
