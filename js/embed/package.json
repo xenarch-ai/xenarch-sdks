@@ -1,0 +1,48 @@
+{
+  "name": "@xenarch/embed",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Drop-in <script> snippet that upgrades any element with data-xenarch-link into a Xenarch Pay button. Vanilla JS, no dependencies.",
+  "keywords": [
+    "xenarch",
+    "x402",
+    "usdc",
+    "base",
+    "payment-link",
+    "checkout",
+    "embed",
+    "stripe-alternative",
+    "non-custodial"
+  ],
+  "homepage": "https://xenarch.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xenarch-ai/xenarch-sdks",
+    "directory": "js/embed"
+  },
+  "bugs": {
+    "url": "https://github.com/xenarch-ai/xenarch-sdks/issues"
+  },
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "main": "dist/v1.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "vitest run",
+    "size": "node build.mjs && node -e \"const fs=require('fs'),zlib=require('zlib');const raw=fs.readFileSync('dist/v1.js');const gz=zlib.gzipSync(raw);console.log('raw',raw.length,'gzip',gz.length);if(gz.length>9*1024){console.error('over 9KB budget');process.exit(1)}\"",
+    "publish:cdn": "bash scripts/publish.sh"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "happy-dom": "^15.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
