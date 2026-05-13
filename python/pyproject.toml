@@ -1,7 +1,7 @@
 [project]
 name = "xenarch"
-version = "0.2.2"
-description = "Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402–gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement. 0% fee, no contract, facilitator-agnostic."
+version = "0.2.3"
+description = "Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402–gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement on-chain. 0% Xenarch fee. The agent wallet only ever holds USDC — no ETH, no gas coin needed."
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
