@@ -1,0 +1,36 @@
+name: CI — JS Embed
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "js/**"
+      - ".github/workflows/ci-js.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "js/**"
+      - ".github/workflows/ci-js.yml"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: js/embed
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (asserts <9KB gzip budget)
+        run: npm run build
+
+      - name: Test
+        run: npm test
