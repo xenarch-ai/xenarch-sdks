@@ -106,9 +106,31 @@ Replay with:
           return;
         }
 
+        if (dryRun) {
+          if (jsonOutput) {
+            console.log(JSON.stringify({ dry_run: true, gate }));
+            return;
+          }
+          const facilitatorList = gate.facilitators
+            .map((f) => `${f.name} (${f.url})`)
+            .join("\n               ");
+          console.log(`${yellow("[DRY RUN]")} Would pay $${gate.price_usd} ${gate.asset} for ${url}
+
+  ${bold("Gate ID:")}     ${gate.gate_id}
+  ${bold("Seller:")}      ${gate.seller_wallet}
+  ${bold("Network:")}     ${gate.network}
+  ${bold("Wallet:")}      ${signerAddress}
+  ${bold("Facilitators:")} ${facilitatorList || "(none advertised)"}
+
+No transaction sent.`);
+          return;
+        }
+
         // XEN-373 preflight: if XENARCH_API_TOKEN is set, ask the
         // control plane whether this payment is allowed before settling.
-        // Bypassed when no token is configured (Phase-1 compat).
+        // Bypassed when no token is configured (Phase-1 compat). Runs
+        // after the dry-run short-circuit so --dry-run doesn't consume
+        // a real preflight auth_token.
         const preflight = await checkPreflight(
           config.api_base,
           url,
@@ -128,26 +150,6 @@ Replay with:
         }
         if (!("bypassed" in preflight)) {
           authToken = preflight.auth_token;
-        }
-
-        if (dryRun) {
-          if (jsonOutput) {
-            console.log(JSON.stringify({ dry_run: true, gate }));
-            return;
-          }
-          const facilitatorList = gate.facilitators
-            .map((f) => `${f.name} (${f.url})`)
-            .join("\n               ");
-          console.log(`${yellow("[DRY RUN]")} Would pay $${gate.price_usd} ${gate.asset} for ${url}
-
-  ${bold("Gate ID:")}     ${gate.gate_id}
-  ${bold("Seller:")}      ${gate.seller_wallet}
-  ${bold("Network:")}     ${gate.network}
-  ${bold("Wallet:")}      ${signerAddress}
-  ${bold("Facilitators:")} ${facilitatorList || "(none advertised)"}
-
-No transaction sent.`);
-          return;
         }
 
         // Execute payment via third-party facilitator

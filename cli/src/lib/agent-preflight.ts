@@ -132,10 +132,13 @@ export async function checkPreflight(
     const body = (await res.json()) as PreflightResult;
     return body;
   } catch (err) {
+    // Surface only the error kind, not the message — the message can
+    // carry the request URL/body in some fetch implementations.
+    const kind = (err as Error).name || "NetworkError";
     return {
       ok: false,
       reason: "control_plane_unreachable",
-      detail: (err as Error).message || "Network error reaching control plane",
+      detail: `${kind} reaching control plane`,
     };
   } finally {
     clearTimeout(timer);

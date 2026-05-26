@@ -147,6 +147,14 @@ class XenarchPayer(X402Payer):
         # Holds the auth_token returned by the most recent preflight,
         # consumed exactly once on the matching receipt post. None when
         # preflight was bypassed (no XENARCH_API_TOKEN) or after consume.
+        #
+        # **One-pay-at-a-time per payer instance.** Two concurrent
+        # ``pay_async`` calls on the same payer will race: B's preflight
+        # token overwrites A's before A reaches its receipt POST, and
+        # A's receipt then carries B's token → platform rejects with
+        # "auth_token URL/amount does not match". Construct one
+        # ``XenarchPayer`` per concurrent payment, or serialise pays
+        # through an asyncio.Lock at the caller.
         self._pending_auth_token: str | None = None
 
     # ------------------------------------------------------------------
@@ -577,7 +585,9 @@ class XenarchPayer(X402Payer):
             if retry.status_code != 200:
                 # The on-chain tx already happened; surface enough state
                 # for the caller to manually claim the content rather
-                # than silently eating the spend.
+                # than silently eating the spend. Consume the preflight
+                # token here too so it doesn't leak into the next pay.
+                self._pending_auth_token = None
                 return {
                     "error": "xenarch_replay_failed",
                     "url": url,
@@ -735,6 +745,9 @@ class XenarchPayer(X402Payer):
             )
 
             if retry.status_code != 200:
+                # Consume the preflight token so it doesn't leak into
+                # the next pay (mirror sync path above).
+                self._pending_auth_token = None
                 return {
                     "error": "xenarch_replay_failed",
                     "url": url,

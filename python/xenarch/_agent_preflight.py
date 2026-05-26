@@ -134,7 +134,11 @@ class AgentPreflightChecker:
             return PreflightDecision(
                 ok=False,
                 reason="control_plane_unreachable",
-                detail=str(exc),
+                # Redact the message — httpx exception reprs can carry
+                # the request body if upstream code wraps them. Surface
+                # only the exception type so the operator gets enough
+                # signal without ever exposing the X-Api-Token.
+                detail=type(exc).__name__,
             )
         return _parse_response(resp)
 
@@ -162,7 +166,7 @@ class AgentPreflightChecker:
             return PreflightDecision(
                 ok=False,
                 reason="control_plane_unreachable",
-                detail=str(exc),
+                detail=type(exc).__name__,
             )
         return _parse_response(resp)
 
