@@ -49,6 +49,16 @@ print(tool.invoke("https://example.com/premium-article"))
 
 `XenarchPay` is a LangChain `BaseTool` over the neutral `x402-agent` pay loop, plus Xenarch's signed-receipt and reputation extras. Settles USDC on Base via EIP-3009 — never custodial. Agent wallet only holds USDC; no ETH required.
 
+### Agent control plane (optional)
+
+If you've created an `xa_live_*` token from https://dash.xenarch.dev/agent/settings, set it as `XENARCH_API_TOKEN` (or pass `xenarch_token=...` to `XenarchPay`) and every settled payment will surface in your dashboard receipts feed:
+
+```bash
+export XENARCH_API_TOKEN=xa_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Reporting is fire-and-forget; network failures are queued in-memory and retried on the next payment. Without the env var, the SDK behaves exactly as before.
+
 ### Publisher: gate a FastAPI endpoint behind HTTP 402
 
 ```python
