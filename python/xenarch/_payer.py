@@ -55,6 +55,10 @@ except ImportError as exc:  # pragma: no cover - install-error path
         "include it)."
     ) from exc
 
+from xenarch._agent_preflight import (
+    AgentPreflightChecker,
+    refusal_dict_from_decision,
+)
 from xenarch._agent_receipts import AgentReceiptReporter, build_payload
 from xenarch.client import GateResponse
 from xenarch.router import FacilitatorConfig, PaymentContext, Router
@@ -135,6 +139,15 @@ class XenarchPayer(X402Payer):
         self._agent_receipts = AgentReceiptReporter(
             agent_control_plane_url, token=xenarch_token
         )
+        # XEN-373: preflight blocks the pay flow when a token is set.
+        # Reuses the same token resolution so users only paste it once.
+        self._agent_preflight = AgentPreflightChecker(
+            agent_control_plane_url, token=xenarch_token
+        )
+        # Holds the auth_token returned by the most recent preflight,
+        # consumed exactly once on the matching receipt post. None when
+        # preflight was bypassed (no XENARCH_API_TOKEN) or after consume.
+        self._pending_auth_token: str | None = None
 
     # ------------------------------------------------------------------
     # Public entry points — V2-aware overrides.
@@ -588,6 +601,8 @@ class XenarchPayer(X402Payer):
                 tx_hash=tx_hash,
                 facilitator_url=chosen.url,
             )
+            consumed_token = self._pending_auth_token
+            self._pending_auth_token = None
             self._agent_receipts.report(
                 build_payload(
                     url=url,
@@ -595,6 +610,7 @@ class XenarchPayer(X402Payer):
                     tx_hash=tx_hash,
                     facilitator=chosen.url,
                     wallet_address=getattr(self, "_signer_address", None),
+                    auth_token=consumed_token,
                 )
             )
             return result
@@ -739,6 +755,8 @@ class XenarchPayer(X402Payer):
                 tx_hash=tx_hash,
                 facilitator_url=chosen.url,
             )
+            consumed_token = self._pending_auth_token
+            self._pending_auth_token = None
             await self._agent_receipts.report_async(
                 build_payload(
                     url=url,
@@ -746,6 +764,7 @@ class XenarchPayer(X402Payer):
                     tx_hash=tx_hash,
                     facilitator=chosen.url,
                     wallet_address=getattr(self, "_signer_address", None),
+                    auth_token=consumed_token,
                 )
             )
             return result
@@ -800,6 +819,14 @@ class XenarchPayer(X402Payer):
         accept: AnyPaymentRequirements,
         price: Decimal,
     ) -> dict[str, Any] | None:
+        # XEN-373: control-plane preflight runs before the existing
+        # reputation gate. If a token is configured + the platform
+        # refuses (scope rule, paused, unreachable), short-circuit.
+        decision = self._agent_preflight.check(url=url, amount_usd=price)
+        if not decision.ok:
+            return refusal_dict_from_decision(decision, url)
+        # Stash the chain-of-custody token for the eventual receipt post.
+        self._pending_auth_token = decision.auth_token
         return self._reputation_gate(accept.pay_to)
 
     async def _pre_payment_hook_async(
@@ -809,6 +836,12 @@ class XenarchPayer(X402Payer):
         accept: AnyPaymentRequirements,
         price: Decimal,
     ) -> dict[str, Any] | None:
+        decision = await self._agent_preflight.check_async(
+            url=url, amount_usd=price
+        )
+        if not decision.ok:
+            return refusal_dict_from_decision(decision, url)
+        self._pending_auth_token = decision.auth_token
         return await self._reputation_gate_async(accept.pay_to)
 
     def _post_payment_hook(
@@ -841,6 +874,8 @@ class XenarchPayer(X402Payer):
         if not url or amount is None:
             return
         tx_hash = self._extract_tx_hash(paid_response)
+        consumed_token = self._pending_auth_token
+        self._pending_auth_token = None
         self._agent_receipts.report(
             build_payload(
                 url=str(url),
@@ -848,6 +883,7 @@ class XenarchPayer(X402Payer):
                 tx_hash=tx_hash,
                 facilitator=self.facilitator_url,
                 wallet_address=getattr(self, "_signer_address", None),
+                auth_token=consumed_token,
             )
         )
 
@@ -863,6 +899,8 @@ class XenarchPayer(X402Payer):
         if not url or amount is None:
             return
         tx_hash = self._extract_tx_hash(paid_response)
+        consumed_token = self._pending_auth_token
+        self._pending_auth_token = None
         await self._agent_receipts.report_async(
             build_payload(
                 url=str(url),
@@ -870,6 +908,7 @@ class XenarchPayer(X402Payer):
                 tx_hash=tx_hash,
                 facilitator=self.facilitator_url,
                 wallet_address=getattr(self, "_signer_address", None),
+                auth_token=consumed_token,
             )
         )
 
