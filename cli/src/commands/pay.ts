@@ -5,6 +5,7 @@ import { fetchGate, fetchWithReplay } from "../lib/api.js";
 import { executePayment } from "../lib/payment.js";
 import { loadCache, cacheToken, getRecentPayment } from "../lib/token-cache.js";
 import { reportReceipt } from "../lib/agent-receipts.js";
+import { checkPreflight, formatDenyMessage } from "../lib/agent-preflight.js";
 import { bold, green, yellow, dim } from "../lib/output.js";
 
 function isValidUrl(s: string): boolean {
@@ -125,6 +126,32 @@ No transaction sent.`);
           return;
         }
 
+        // XEN-373 preflight: if XENARCH_API_TOKEN is set, ask the
+        // control plane whether this payment is allowed before settling.
+        // Bypassed when no token is configured (Phase-1 compat). Runs
+        // after the dry-run short-circuit so --dry-run doesn't consume
+        // a real preflight auth_token.
+        const preflight = await checkPreflight(
+          config.api_base,
+          url,
+          gate.price_usd,
+        );
+        let authToken: string | null = null;
+        if (!preflight.ok) {
+          if ("detail" in preflight) {
+            console.error(
+              `Refused by Xenarch control plane: ${preflight.detail}`,
+            );
+          } else {
+            console.error(formatDenyMessage(preflight));
+          }
+          process.exitCode = 1;
+          return;
+        }
+        if (!("bypassed" in preflight)) {
+          authToken = preflight.auth_token;
+        }
+
         // Execute payment via third-party facilitator
         console.log(`Paying $${gate.price_usd} ${gate.asset} for ${url}\n`);
 
@@ -158,7 +185,8 @@ No transaction sent.`);
 
         // Report to the agent control plane (XEN-372). Fire-and-forget;
         // no-op without XENARCH_API_TOKEN, queued offline on network
-        // failures. Never throws.
+        // failures. Never throws. XEN-373: forward the preflight
+        // auth_token so the platform can mark the receipt chain-verified.
         await reportReceipt(config.api_base, {
           url,
           amount_usd: gate.price_usd,
@@ -168,6 +196,7 @@ No transaction sent.`);
           tx_hash: paymentResult.tx_hash,
           facilitator: paymentResult.facilitator,
           wallet_address: signerAddress,
+          auth_token: authToken,
         });
 
         if (jsonOutput) {

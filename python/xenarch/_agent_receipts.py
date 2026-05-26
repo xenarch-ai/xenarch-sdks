@@ -186,8 +186,9 @@ def build_payload(
     status: str = "paid",
     wallet_address: str | None = None,
     source: str = "sdk",
+    auth_token: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "url": url,
         "amount_usd": str(amount_usd),
         "source": source,
@@ -197,3 +198,9 @@ def build_payload(
         "facilitator": facilitator,
         "wallet_address": wallet_address,
     }
+    # XEN-373: optional preflight chain-of-custody. Tools that have a
+    # XENARCH_API_TOKEN preflight first and forward the resulting
+    # auth_token here so the platform marks the receipt chain-verified.
+    if auth_token:
+        payload["auth_token"] = auth_token
+    return payload

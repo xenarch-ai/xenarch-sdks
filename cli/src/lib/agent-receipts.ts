@@ -28,6 +28,10 @@ export interface ReceiptPayload {
   tx_hash?: string | null;
   facilitator?: string | null;
   wallet_address?: string | null;
+  // XEN-373: chain-of-custody voucher from POST /v1/agent/preflight.
+  // Optional — receipts without it record with chain_verified=false
+  // for Phase-2 backwards compat.
+  auth_token?: string | null;
 }
 
 function queuePath(): string {
