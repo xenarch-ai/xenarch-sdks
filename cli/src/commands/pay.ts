@@ -4,6 +4,7 @@ import { loadSigner } from "../lib/wallet.js";
 import { fetchGate, fetchWithReplay } from "../lib/api.js";
 import { executePayment } from "../lib/payment.js";
 import { loadCache, cacheToken, getRecentPayment } from "../lib/token-cache.js";
+import { reportReceipt } from "../lib/agent-receipts.js";
 import { bold, green, yellow, dim } from "../lib/output.js";
 
 function isValidUrl(s: string): boolean {
@@ -145,13 +146,28 @@ No transaction sent.`);
         const replayOk = replay.ok;
 
         // Cache for future short-circuits and `xenarch history`.
+        const paidAt = new Date().toISOString();
         await cacheToken({
           url,
           gate_id: gate.gate_id,
           price_usd: gate.price_usd,
           tx_hash: paymentResult.tx_hash,
           facilitator: paymentResult.facilitator,
-          paid_at: new Date().toISOString(),
+          paid_at: paidAt,
+        });
+
+        // Report to the agent control plane (XEN-372). Fire-and-forget;
+        // no-op without XENARCH_API_TOKEN, queued offline on network
+        // failures. Never throws.
+        await reportReceipt(config.api_base, {
+          url,
+          amount_usd: gate.price_usd,
+          source: "cli",
+          status: replayOk ? "paid" : "pending",
+          paid_at: paidAt,
+          tx_hash: paymentResult.tx_hash,
+          facilitator: paymentResult.facilitator,
+          wallet_address: signerAddress,
         });
 
         if (jsonOutput) {

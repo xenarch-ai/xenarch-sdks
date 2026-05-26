@@ -55,6 +55,7 @@ except ImportError as exc:  # pragma: no cover - install-error path
         "include it)."
     ) from exc
 
+from xenarch._agent_receipts import AgentReceiptReporter, build_payload
 from xenarch.client import GateResponse
 from xenarch.router import FacilitatorConfig, PaymentContext, Router
 
@@ -101,6 +102,8 @@ class XenarchPayer(X402Payer):
         reputation_timeout: float = 5.0,
         router: Router | None = None,
         facilitator_settle_timeout: float = 30.0,
+        xenarch_token: str | None = None,
+        agent_control_plane_url: str = "https://xenarch.dev",
         **x402_kwargs: Any,
     ) -> None:
         super().__init__(**x402_kwargs)
@@ -126,6 +129,12 @@ class XenarchPayer(X402Payer):
         # safest default since we won't make outbound calls to URLs
         # outside the publisher's own advertised list.
         self._router: Router | None = router
+        # XEN-372: agent control plane receipt reporter. No-op without
+        # XENARCH_API_TOKEN (env or constructor). Drains its retry queue
+        # opportunistically on each pay.
+        self._agent_receipts = AgentReceiptReporter(
+            agent_control_plane_url, token=xenarch_token
+        )
 
     # ------------------------------------------------------------------
     # Public entry points — V2-aware overrides.
@@ -570,7 +579,7 @@ class XenarchPayer(X402Payer):
             # Skip _post_payment_hook in the V2 path — it's a V1 receipt
             # mechanism that reads X-PAYMENT-RESPONSE, which a Xenarch
             # replay never carries. We have the tx hash directly already.
-            return self._v2_success_dict(
+            result = self._v2_success_dict(
                 url=url,
                 accept=accept,
                 price=price,
@@ -579,6 +588,16 @@ class XenarchPayer(X402Payer):
                 tx_hash=tx_hash,
                 facilitator_url=chosen.url,
             )
+            self._agent_receipts.report(
+                build_payload(
+                    url=url,
+                    amount_usd=price,
+                    tx_hash=tx_hash,
+                    facilitator=chosen.url,
+                    wallet_address=getattr(self, "_signer_address", None),
+                )
+            )
+            return result
 
     async def _pay_xenarch_v2_async(
         self,
@@ -711,7 +730,7 @@ class XenarchPayer(X402Payer):
                 }
 
             self.budget_policy.commit(price)
-            return self._v2_success_dict(
+            result = self._v2_success_dict(
                 url=url,
                 accept=accept,
                 price=price,
@@ -720,6 +739,16 @@ class XenarchPayer(X402Payer):
                 tx_hash=tx_hash,
                 facilitator_url=chosen.url,
             )
+            await self._agent_receipts.report_async(
+                build_payload(
+                    url=url,
+                    amount_usd=price,
+                    tx_hash=tx_hash,
+                    facilitator=chosen.url,
+                    wallet_address=getattr(self, "_signer_address", None),
+                )
+            )
+            return result
 
     # ------------------------------------------------------------------
     # Facilitator helpers.
@@ -788,6 +817,7 @@ class XenarchPayer(X402Payer):
         paid_response: httpx.Response,
     ) -> None:
         self._attach_receipt(result, paid_response)
+        self._report_v1_to_control_plane(result, paid_response)
 
     async def _post_payment_hook_async(
         self,
@@ -795,6 +825,53 @@ class XenarchPayer(X402Payer):
         paid_response: httpx.Response,
     ) -> None:
         await self._attach_receipt_async(result, paid_response)
+        await self._report_v1_to_control_plane_async(result, paid_response)
+
+    def _report_v1_to_control_plane(
+        self,
+        result: dict[str, Any],
+        paid_response: httpx.Response,
+    ) -> None:
+        # V1 success rows: url, amount_usd, pay_to, asset, network are all
+        # set; tx_hash lives in the X-PAYMENT-RESPONSE header. Best-effort.
+        if not self._agent_receipts.enabled:
+            return
+        url = result.get("url")
+        amount = result.get("amount_usd")
+        if not url or amount is None:
+            return
+        tx_hash = self._extract_tx_hash(paid_response)
+        self._agent_receipts.report(
+            build_payload(
+                url=str(url),
+                amount_usd=str(amount),
+                tx_hash=tx_hash,
+                facilitator=self.facilitator_url,
+                wallet_address=getattr(self, "_signer_address", None),
+            )
+        )
+
+    async def _report_v1_to_control_plane_async(
+        self,
+        result: dict[str, Any],
+        paid_response: httpx.Response,
+    ) -> None:
+        if not self._agent_receipts.enabled:
+            return
+        url = result.get("url")
+        amount = result.get("amount_usd")
+        if not url or amount is None:
+            return
+        tx_hash = self._extract_tx_hash(paid_response)
+        await self._agent_receipts.report_async(
+            build_payload(
+                url=str(url),
+                amount_usd=str(amount),
+                tx_hash=tx_hash,
+                facilitator=self.facilitator_url,
+                wallet_address=getattr(self, "_signer_address", None),
+            )
+        )
 
     # ------------------------------------------------------------------
     # Reputation gate.

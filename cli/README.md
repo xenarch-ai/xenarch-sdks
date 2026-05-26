@@ -48,6 +48,17 @@ xenarch history --json
 
 Set `XENARCH_PRIVATE_KEY` to use an existing wallet instead of the local one, and `XENARCH_MAX_PAYMENT_USD` to cap per-call spend (default unbounded).
 
+## Agent control plane (optional)
+
+If you've created an `xa_live_*` token from the Xenarch dashboard at https://dash.xenarch.dev/agent/settings, set it as the `XENARCH_API_TOKEN` env var. Every `xenarch pay` will report its receipt to the dashboard so you can see all your spend in one place:
+
+```bash
+export XENARCH_API_TOKEN=xa_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xenarch pay https://example.com/premium-article
+```
+
+Without the env var, the CLI works exactly as before — receipt reporting is opt-in and best-effort (network failures queue offline at `~/.xenarch/receipts-queue.jsonl` and retry on next invocation).
+
 ## Links
 
 - Learn more: https://xenarch.com
