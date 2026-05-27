@@ -975,7 +975,7 @@ class XenarchPayer(X402Payer):
         self,
         *,
         url: str,
-        price,
+        price: Decimal | str,
         tx_hash: str | None,
         facilitator: str | None,
     ) -> None:
@@ -1008,7 +1008,7 @@ class XenarchPayer(X402Payer):
         self,
         *,
         url: str,
-        price,
+        price: Decimal | str,
         tx_hash: str | None,
         facilitator: str | None,
     ) -> None:
