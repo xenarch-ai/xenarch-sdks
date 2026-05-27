@@ -514,6 +514,8 @@ class XenarchPayer(X402Payer):
                 publisher_facilitators=[f.url for f in gate.facilitators],
             )
             if not candidates:
+                # XEN-374: settlement never happened — refund the cap.
+                self._refund_cap_on_failure_sync(url=url, price=price, tx_hash=None, facilitator=None)
                 return {
                     "error": "no_facilitator_settled",
                     "url": url,
@@ -568,6 +570,8 @@ class XenarchPayer(X402Payer):
                 break
 
             if tx_hash is None or chosen is None:
+                # XEN-374: settlement never happened — refund the cap.
+                self._refund_cap_on_failure_sync(url=url, price=price, tx_hash=None, facilitator=None)
                 return {
                     "error": "no_facilitator_settled",
                     "url": url,
@@ -587,7 +591,22 @@ class XenarchPayer(X402Payer):
                 # for the caller to manually claim the content rather
                 # than silently eating the spend. Consume the preflight
                 # token here too so it doesn't leak into the next pay.
+                # XEN-374: post a status='failed' receipt with the
+                # auth_token so the platform refunds the cap charge.
+                consumed_token = self._pending_auth_token
                 self._pending_auth_token = None
+                if consumed_token:
+                    self._agent_receipts.report(
+                        build_payload(
+                            url=url,
+                            amount_usd=price,
+                            tx_hash=tx_hash,
+                            facilitator=chosen.url,
+                            status="failed",
+                            wallet_address=getattr(self, "_signer_address", None),
+                            auth_token=consumed_token,
+                        )
+                    )
                 return {
                     "error": "xenarch_replay_failed",
                     "url": url,
@@ -674,6 +693,10 @@ class XenarchPayer(X402Payer):
                 publisher_facilitators=[f.url for f in gate.facilitators],
             )
             if not candidates:
+                # XEN-374: settlement never happened — refund the cap.
+                await self._refund_cap_on_failure_async(
+                    url=url, price=price, tx_hash=None, facilitator=None
+                )
                 return {
                     "error": "no_facilitator_settled",
                     "url": url,
@@ -730,6 +753,10 @@ class XenarchPayer(X402Payer):
                 break
 
             if tx_hash is None or chosen is None:
+                # XEN-374: settlement never happened — refund the cap.
+                await self._refund_cap_on_failure_async(
+                    url=url, price=price, tx_hash=None, facilitator=None
+                )
                 return {
                     "error": "no_facilitator_settled",
                     "url": url,
@@ -747,7 +774,22 @@ class XenarchPayer(X402Payer):
             if retry.status_code != 200:
                 # Consume the preflight token so it doesn't leak into
                 # the next pay (mirror sync path above).
+                # XEN-374: post a status='failed' receipt with the
+                # auth_token so the platform refunds the cap charge.
+                consumed_token = self._pending_auth_token
                 self._pending_auth_token = None
+                if consumed_token:
+                    await self._agent_receipts.report_async(
+                        build_payload(
+                            url=url,
+                            amount_usd=price,
+                            tx_hash=tx_hash,
+                            facilitator=chosen.url,
+                            status="failed",
+                            wallet_address=getattr(self, "_signer_address", None),
+                            auth_token=consumed_token,
+                        )
+                    )
                 return {
                     "error": "xenarch_replay_failed",
                     "url": url,
@@ -924,6 +966,70 @@ class XenarchPayer(X402Payer):
                 auth_token=consumed_token,
             )
         )
+
+    # ------------------------------------------------------------------
+    # XEN-374: cap-refund helpers — pre-settle failure paths.
+    # ------------------------------------------------------------------
+
+    def _refund_cap_on_failure_sync(
+        self,
+        *,
+        url: str,
+        price: Decimal | str,
+        tx_hash: str | None,
+        facilitator: str | None,
+    ) -> None:
+        """Post a status='failed' receipt with the pending auth_token so
+        the platform refunds the cap charge.
+
+        Called from pre-settle failure paths (no_facilitator_settled).
+        Best-effort; never raises.
+        """
+        consumed_token = self._pending_auth_token
+        self._pending_auth_token = None
+        if not consumed_token:
+            return
+        try:
+            self._agent_receipts.report(
+                build_payload(
+                    url=url,
+                    amount_usd=price,
+                    tx_hash=tx_hash,
+                    facilitator=facilitator,
+                    status="failed",
+                    wallet_address=getattr(self, "_signer_address", None),
+                    auth_token=consumed_token,
+                )
+            )
+        except Exception:  # noqa: BLE001 — refund is best-effort
+            pass
+
+    async def _refund_cap_on_failure_async(
+        self,
+        *,
+        url: str,
+        price: Decimal | str,
+        tx_hash: str | None,
+        facilitator: str | None,
+    ) -> None:
+        consumed_token = self._pending_auth_token
+        self._pending_auth_token = None
+        if not consumed_token:
+            return
+        try:
+            await self._agent_receipts.report_async(
+                build_payload(
+                    url=url,
+                    amount_usd=price,
+                    tx_hash=tx_hash,
+                    facilitator=facilitator,
+                    status="failed",
+                    wallet_address=getattr(self, "_signer_address", None),
+                    auth_token=consumed_token,
+                )
+            )
+        except Exception:  # noqa: BLE001
+            pass
 
     # ------------------------------------------------------------------
     # Reputation gate.
