@@ -50,14 +50,48 @@ Set `XENARCH_PRIVATE_KEY` to use an existing wallet instead of the local one, an
 
 ## Agent control plane (optional)
 
-If you've created an `xa_live_*` token from the Xenarch dashboard at https://dash.xenarch.dev/agent/settings, set it as the `XENARCH_API_TOKEN` env var. Every `xenarch pay` will report its receipt to the dashboard so you can see all your spend in one place:
+If you've created an `xa_live_*` token from the Xenarch dashboard at https://dash.xenarch.dev/agent/settings, set it as the `XENARCH_API_TOKEN` env var. Every `xenarch pay` will:
+
+1. **Preflight** with the platform — server-enforced caps (per-tx, daily, monthly), scope rules (allow/deny domain patterns), and a fleet-wide kill switch. Refused payments stop before any USDC is signed.
+2. **Settle** on chain via a third-party x402 facilitator (PayAI, xpay, Heurist, etc.) — same as before.
+3. **Report the receipt** back to the dashboard so you see spend, hit counters, and refusal audits in one place.
 
 ```bash
 export XENARCH_API_TOKEN=xa_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xenarch pay https://example.com/premium-article
 ```
 
-Without the env var, the CLI works exactly as before — receipt reporting is opt-in and best-effort (network failures queue offline at `~/.xenarch/receipts-queue.jsonl` and retry on next invocation).
+Without the env var, the CLI works exactly as before — receipt reporting + control-plane enforcement are opt-in. Network failures during receipt POST queue offline at `~/.xenarch/receipts-queue.jsonl` and retry on next invocation.
+
+### What refusals look like
+
+When the control plane refuses a payment, the CLI prints the reason and exits with code 1. No USDC is signed and no transaction is sent.
+
+```
+$ xenarch pay https://api.openai.com/v1/chat
+Refused by Xenarch control plane: daily cap exceeded ($1.00 spent of $1.00). Resets in 18h 22m.
+Edit cap at https://dash.xenarch.dev/agent/caps
+```
+
+```
+$ xenarch pay https://api.openai.com/v1/audio/speech
+Refused by Xenarch control plane: per-transaction cap exceeded (max $0.50).
+Raise the cap at https://dash.xenarch.dev/agent/caps
+```
+
+```
+$ xenarch pay https://api.scammer.com/x
+Refused by Xenarch control plane: scope rule '*.scammer.com' ("phish") matched this URL.
+Edit rules at https://dash.xenarch.dev/agent/scope
+```
+
+```
+$ xenarch pay https://example.com/anything
+Refused by Xenarch control plane: agent is paused.
+Toggle the kill switch off at https://dash.xenarch.dev/agent/scope
+```
+
+If the platform itself is unreachable (control plane down, network error), the CLI fails closed: refuses to pay rather than risk bypassing a cap or kill switch you configured. Brief platform outages briefly stall payments; the fail-closed default protects budgets over throughput.
 
 ## Links
 
