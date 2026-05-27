@@ -51,13 +51,54 @@ print(tool.invoke("https://example.com/premium-article"))
 
 ### Agent control plane (optional)
 
-If you've created an `xa_live_*` token from https://dash.xenarch.dev/agent/settings, set it as `XENARCH_API_TOKEN` (or pass `xenarch_token=...` to `XenarchPay`) and every settled payment will surface in your dashboard receipts feed:
+If you've created an `xa_live_*` token from https://dash.xenarch.dev/agent/settings, set it as `XENARCH_API_TOKEN` (or pass `xenarch_token=...` to `XenarchPay`). Every `pay()` then:
+
+1. **Preflights** with the platform — server-enforced caps (per-tx, daily, monthly), scope rules (allow/deny domain patterns), and a fleet-wide kill switch. Refused payments stop before any USDC is signed.
+2. **Settles** on chain via a third-party x402 facilitator (PayAI, xpay, Heurist, etc.).
+3. **Reports the receipt** back to the dashboard.
+4. **On settle failure** (facilitator down, replay rejected by the gate), POSTs a `status='failed'` receipt with the preflight's auth_token so the platform refunds the cap charge. Operators don't lose budget for payments that didn't land.
 
 ```bash
 export XENARCH_API_TOKEN=xa_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Reporting is fire-and-forget; network failures are queued in-memory and retried on the next payment. Without the env var, the SDK behaves exactly as before.
+Reporting is fire-and-forget; network failures are queued in-memory and retried on the next payment. Without the env var, the SDK behaves as before — no preflight, no receipt reporting.
+
+#### What refusals look like
+
+`pay()` returns a dict. When the control plane refuses, the dict has an `error` key with a `control_plane_*` value and a `hint` URL pointing at the dashboard:
+
+```python
+result = tool.invoke("https://api.openai.com/v1/chat")
+# {'error': 'control_plane_daily_cap',
+#  'reason': 'daily_cap',
+#  'url': 'https://api.openai.com/v1/chat',
+#  'cap_daily': '1.0000',
+#  'remaining_today': '0.0000',
+#  'resets_today_at': '2026-05-28T00:00:00Z',
+#  'hint': 'Raise or reset the daily cap at https://dash.xenarch.dev/agent/caps'}
+```
+
+Other refusal shapes:
+
+| `error` | `reason` | When |
+|---|---|---|
+| `control_plane_per_tx_cap` | `per_tx_cap` | Single payment exceeds per-tx cap |
+| `control_plane_daily_cap` | `daily_cap` | Daily cap exhausted; payload includes `cap_daily`, `remaining_today`, `resets_today_at` |
+| `control_plane_monthly_cap` | `monthly_cap` | Monthly cap exhausted; payload includes `cap_monthly`, `remaining_month`, `resets_month_at` |
+| `control_plane_scope_denied` | `scope` | URL matched a deny rule (or didn't match an allow rule under deny-by-default); payload includes `matched_rule` |
+| `control_plane_paused` | `paused` | Kill switch is on |
+| `control_plane_unreachable` | n/a | Network / platform error; `detail` includes the kind. Fail-closed — no payment made |
+
+If the gate publishes a malformed `pay.json` (some WordPress plugin versions emit empty `receiver` / `seller_wallet` fields), the SDK refuses with `error='pay_json_invalid'` before even reaching preflight. Pass `discover_via_pay_json=False` to skip the pre-check and go straight to the gate's 402 response:
+
+```python
+tool = XenarchPay(
+    private_key="0x...",
+    xenarch_token="xa_live_...",
+    discover_via_pay_json=False,  # bypass pay.json optimization
+)
+```
 
 ### Publisher: gate a FastAPI endpoint behind HTTP 402
 
