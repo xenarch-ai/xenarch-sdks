@@ -57,6 +57,15 @@ class PreflightDecision:
     reason: str | None = None
     matched_rule: dict[str, Any] | None = None
     detail: str | None = None
+    # XEN-374 cap context — present on cap denies so the refusal dict can
+    # surface useful operator messages.
+    remaining_today: str | None = None
+    remaining_month: str | None = None
+    resets_today_at: str | None = None
+    resets_month_at: str | None = None
+    cap_per_tx: str | None = None
+    cap_daily: str | None = None
+    cap_monthly: str | None = None
 
 
 def _refusal_dict(decision: PreflightDecision, url: str) -> dict[str, Any]:
@@ -75,6 +84,34 @@ def _refusal_dict(decision: PreflightDecision, url: str) -> dict[str, Any]:
             "url": url,
             "reason": "paused",
             "hint": "Toggle the kill switch at https://dash.xenarch.dev/agent/scope",
+        }
+    if decision.reason == "per_tx_cap":
+        return {
+            "error": "control_plane_per_tx_cap",
+            "url": url,
+            "reason": "per_tx_cap",
+            "cap_per_tx": decision.cap_per_tx,
+            "hint": "Raise the per-tx cap at https://dash.xenarch.dev/agent/caps",
+        }
+    if decision.reason == "daily_cap":
+        return {
+            "error": "control_plane_daily_cap",
+            "url": url,
+            "reason": "daily_cap",
+            "cap_daily": decision.cap_daily,
+            "remaining_today": decision.remaining_today,
+            "resets_today_at": decision.resets_today_at,
+            "hint": "Raise or reset the daily cap at https://dash.xenarch.dev/agent/caps",
+        }
+    if decision.reason == "monthly_cap":
+        return {
+            "error": "control_plane_monthly_cap",
+            "url": url,
+            "reason": "monthly_cap",
+            "cap_monthly": decision.cap_monthly,
+            "remaining_month": decision.remaining_month,
+            "resets_month_at": decision.resets_month_at,
+            "hint": "Raise the monthly cap at https://dash.xenarch.dev/agent/caps",
         }
     if decision.reason == "control_plane_unreachable":
         return {
@@ -202,6 +239,13 @@ def _parse_response(resp: httpx.Response) -> PreflightDecision:
         ok=False,
         reason=body.get("reason"),
         matched_rule=body.get("matched_rule"),
+        remaining_today=body.get("remaining_today"),
+        remaining_month=body.get("remaining_month"),
+        resets_today_at=body.get("resets_today_at"),
+        resets_month_at=body.get("resets_month_at"),
+        cap_per_tx=body.get("cap_per_tx"),
+        cap_daily=body.get("cap_daily"),
+        cap_monthly=body.get("cap_monthly"),
     )
 
 
