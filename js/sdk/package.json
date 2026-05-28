@@ -1,0 +1,64 @@
+{
+  "name": "@xenarch/sdk",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "React component for Xenarch pay links — drop-in <XenarchCheckout/> with redirect / modal / inline modes.",
+  "keywords": [
+    "xenarch",
+    "react",
+    "x402",
+    "usdc",
+    "base",
+    "payment-link",
+    "checkout",
+    "stripe-alternative",
+    "non-custodial"
+  ],
+  "homepage": "https://xenarch.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xenarch-ai/xenarch-sdks",
+    "directory": "js/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/xenarch-ai/xenarch-sdks/issues"
+  },
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.24.0",
+    "happy-dom": "^15.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
