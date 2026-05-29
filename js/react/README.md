@@ -1,11 +1,11 @@
-# @xenarch/sdk
+# @xenarch/react
 
 React component for [Xenarch](https://xenarch.com) pay links — drop in a `<XenarchCheckout/>` and you're done.
 
 ## Install
 
 ```bash
-npm install @xenarch/sdk
+npm install @xenarch/react
 ```
 
 Peer deps: `react >= 18`, `react-dom >= 18`.
@@ -17,7 +17,7 @@ For drop-on-any-page (no React) use cases, see [`@xenarch/embed`](https://www.np
 ### Redirect mode (default — safest)
 
 ```tsx
-import { XenarchCheckout } from "@xenarch/sdk";
+import { XenarchCheckout } from "@xenarch/react";
 
 <XenarchCheckout linkId="abc123def456">
   Pay 0.99 USDC
@@ -104,7 +104,7 @@ import {
   attachXenarchListener,    // (linkId, {onPaid, onTerminal, onClose}) => unsubscribe
   isValidLinkId,            // (string) => boolean
   HOSTED_ORIGIN,            // "https://pay.xenarch.com"
-} from "@xenarch/sdk";
+} from "@xenarch/react";
 ```
 
 ## Build output

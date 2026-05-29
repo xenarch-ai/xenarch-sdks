@@ -1,4 +1,4 @@
-// @xenarch/sdk — React component for Xenarch pay links.
+// @xenarch/react — React component for Xenarch pay links.
 //
 // Three modes:
 //   redirect  — button navigates to pay.xenarch.com/l/<id>?return_url=<here>
