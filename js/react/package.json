@@ -1,5 +1,5 @@
 {
-  "name": "@xenarch/sdk",
+  "name": "@xenarch/react",
   "version": "1.0.0",
   "type": "module",
   "description": "React component for Xenarch pay links — drop-in <XenarchCheckout/> with redirect / modal / inline modes.",
@@ -18,7 +18,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/xenarch-ai/xenarch-sdks",
-    "directory": "js/sdk"
+    "directory": "js/react"
   },
   "bugs": {
     "url": "https://github.com/xenarch-ai/xenarch-sdks/issues"

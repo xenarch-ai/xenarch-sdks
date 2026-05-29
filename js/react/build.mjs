@@ -1,4 +1,4 @@
-// Build @xenarch/sdk → dist/ with:
+// Build @xenarch/react → dist/ with:
 //   - dist/index.js       ESM bundle (the `main` for bundlers, React external)
 //   - dist/index.cjs      CJS bundle (for older toolchains, React external)
 //   - dist/index.d.ts     Type declarations
