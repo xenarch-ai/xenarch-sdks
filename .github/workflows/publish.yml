@@ -1,0 +1,83 @@
+name: Publish — npm (OIDC Trusted Publishing)
+
+# Publishes JS packages to npm with NO stored token. Authentication is npm
+# Trusted Publishing: this workflow exchanges a short-lived GitHub OIDC token
+# with the registry. Configure the trusted publisher once per package at
+#   npmjs.com → package → Settings → Trusted Publisher
+#   repo: emdevries/xenarch-sdks · workflow: publish.yml
+#
+# NOTE: a package must already exist on npm before its trusted publisher can be
+# configured (npm has no "pending publisher"). The first publish of a brand-new
+# package is a one-time manual `npm publish` with a token; every release after
+# that flows through here.
+#
+# Trigger: a published GitHub Release whose tag names the package + version,
+# e.g. tag `react-v1.0.1` → publishes js/react. Manual runs via the Actions tab.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package dir under js/ to publish (e.g. react, embed)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write # REQUIRED for OIDC trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # Trusted Publishing needs npm >= 11.5.1; setup-node ships an older npm.
+      - name: Upgrade npm (OIDC support)
+        run: npm install -g npm@latest
+
+      # Resolve which package dir to publish: from the release tag
+      # (`<pkg>-v<version>`) or the manual workflow_dispatch input.
+      - name: Resolve package dir
+        id: pkg
+        # Untrusted inputs go through env vars, never interpolated directly into
+        # the shell — `${{ inputs.package }}` inline would be a script-injection sink.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PACKAGE: ${{ inputs.package }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            DIR="$INPUT_PACKAGE"
+          else
+            DIR="${GITHUB_REF_NAME%%-v*}"
+          fi
+          if [ ! -d "js/$DIR" ]; then
+            echo "::error::js/$DIR not found (derived from '${GITHUB_REF_NAME}')"
+            exit 1
+          fi
+          echo "dir=js/$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm ci
+
+      - name: Build
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm run build
+
+      - name: Test
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm test
+
+      # No NODE_AUTH_TOKEN: npm detects id-token and uses trusted publishing.
+      # Provenance attestation is attached automatically.
+      - name: Publish
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm publish --access public
