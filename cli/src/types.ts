@@ -30,6 +30,11 @@ export interface Config {
   network: string;
   auth_token: string | null;
   wc_project_id: string | null;
+  // SIWE session for the agent control plane (`xenarch agent ...`). The
+  // raw `xen_session` cookie value + its ISO expiry. Established by
+  // `xenarch agent login`; replayed on /me/agent/* requests.
+  session_token: string | null;
+  session_expires_at: string | null;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -39,6 +44,8 @@ export const DEFAULT_CONFIG: Config = {
   network: "base",
   auth_token: null,
   wc_project_id: null,
+  session_token: null,
+  session_expires_at: null,
 };
 
 // --- API Responses ---
@@ -227,3 +234,122 @@ export const USDC_ABI = [
  */
 export const GATE_ID_HEADER = "X-Xenarch-Gate-Id";
 export const TX_HASH_HEADER = "X-Xenarch-Tx-Hash";
+
+// --- Agent control plane (SIWE: /v1/me/agent/*) ---
+//
+// Mirrors app/schemas/agents.py. USD amounts arrive as JSON strings
+// (Decimal); the CLI treats them as strings and never does float math.
+
+export const SESSION_COOKIE_NAME = "xen_session";
+
+export interface SiweNonceResponse {
+  nonce: string;
+  issued_at: string;
+  expires_at: string;
+}
+
+export interface MeAgentProfile {
+  id: string;
+  display_name: string | null;
+  label: string | null;
+  paused: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentSummary {
+  period: string;
+  total_usd: string;
+  count: number;
+  by_source: Record<string, string>;
+}
+
+/** GET /caps + the read returned by PUT /caps. `null` on an axis = disabled. */
+export interface AgentCaps {
+  per_tx_usd: string | null;
+  daily_usd: string | null;
+  monthly_usd: string | null;
+  remaining_today: string | null;
+  remaining_month: string | null;
+  resets_today_at: string;
+  resets_month_at: string;
+  updated_at: string | null;
+}
+
+/** PUT /caps body — full replace: an omitted axis disables that cap. */
+export interface AgentCapsPut {
+  per_tx_usd: string | null;
+  daily_usd: string | null;
+  monthly_usd: string | null;
+}
+
+export interface CapResetResult {
+  reset_axis: "day" | "month";
+  new_remaining: string | null;
+  resets_at: string;
+}
+
+export type ScopeMode = "allow" | "deny";
+
+export interface ScopeRuleItem {
+  id: string;
+  pattern: string;
+  mode: ScopeMode;
+  label: string | null;
+  hit_count: number;
+  last_hit_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScopeReadResult {
+  default_mode: ScopeMode;
+  rules: ScopeRuleItem[];
+}
+
+/** PUT /scope body — full replace of the rule set. */
+export interface ScopeRuleInput {
+  pattern: string;
+  mode: ScopeMode;
+  label?: string | null;
+}
+
+export interface PauseResult {
+  paused: boolean;
+  updated_at: string;
+}
+
+export interface AgentApiKeySummary {
+  id: string;
+  label: string | null;
+  hash_preview: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface AgentApiKeyIssued extends AgentApiKeySummary {
+  /** Plaintext `xa_live_*` token — returned exactly once. */
+  plaintext: string;
+}
+
+export interface AgentReceiptItem {
+  id: string;
+  url: string;
+  domain: string;
+  amount_usd: string;
+  tx_hash: string | null;
+  facilitator: string | null;
+  source: string;
+  status: string;
+  paid_at: string;
+  created_at: string;
+  chain_verified: boolean;
+}
+
+export interface AgentReceiptList {
+  receipts: AgentReceiptItem[];
+  total: number;
+  page: number;
+  per_page: number;
+}
