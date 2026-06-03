@@ -9,8 +9,21 @@ import type {
   SiteListItem,
   SiteStatsResponse,
   PayoutUpdateResponse,
+  SiweNonceResponse,
+  MeAgentProfile,
+  AgentSummary,
+  AgentCaps,
+  AgentCapsPut,
+  CapResetResult,
+  ScopeReadResult,
+  ScopeRuleInput,
+  ScopeMode,
+  PauseResult,
+  AgentApiKeySummary,
+  AgentApiKeyIssued,
+  AgentReceiptList,
 } from "../types.js";
-import { GATE_ID_HEADER, TX_HASH_HEADER } from "../types.js";
+import { GATE_ID_HEADER, TX_HASH_HEADER, SESSION_COOKIE_NAME } from "../types.js";
 
 export interface PlatformConfig {
   wc_project_id: string;
@@ -33,7 +46,16 @@ export async function fetchPlatformConfig(
 async function errorMessage(res: Response): Promise<string> {
   try {
     const body = await res.json();
-    return body.detail ?? body.message ?? res.statusText;
+    const detail = body.detail ?? body.message;
+    if (detail === undefined || detail === null) return res.statusText;
+    if (typeof detail === "string") return detail;
+    // FastAPI validation errors (422) return `detail` as an array of
+    // { loc, msg, type } objects; stringify so callers don't surface the
+    // useless "[object Object]" that `new Error(detail)` would produce.
+    if (Array.isArray(detail)) {
+      return detail.map((d) => d?.msg ?? JSON.stringify(d)).join("; ");
+    }
+    return JSON.stringify(detail);
   } catch {
     return res.statusText;
   }
@@ -273,4 +295,203 @@ export async function updatePayout(
   }
 
   return (await res.json()) as PayoutUpdateResponse;
+}
+
+// --- Agent control plane (SIWE session: /v1/me/agent/*) ---
+
+/** Thrown when the SIWE session cookie is missing/expired (HTTP 401). */
+export class SessionExpiredError extends Error {
+  constructor(message = "Session expired") {
+    super(message);
+    this.name = "SessionExpiredError";
+  }
+}
+
+export async function siweNonce(apiBase: string): Promise<SiweNonceResponse> {
+  const res = await fetch(`${apiBase}/v1/auth/siwe/nonce`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to get SIWE nonce: ${await errorMessage(res)}`);
+  }
+  return (await res.json()) as SiweNonceResponse;
+}
+
+/**
+ * Verify the signed EIP-4361 message and capture the session cookie.
+ *
+ * The platform sets `xen_session` as an HttpOnly Set-Cookie. HttpOnly only
+ * blocks *browser* JS — a CLI HTTP client reads it off the response headers
+ * via `getSetCookie()` and replays it as a request `Cookie` header.
+ */
+export async function siweVerify(
+  apiBase: string,
+  message: string,
+  signature: string,
+): Promise<{ token: string }> {
+  const res = await fetch(`${apiBase}/v1/auth/siwe/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, signature }),
+  });
+  if (!res.ok) {
+    throw new Error(`SIWE verification failed: ${await errorMessage(res)}`);
+  }
+
+  // Node's fetch (undici) exposes multiple Set-Cookie headers via
+  // getSetCookie(); fall back to the combined header for other runtimes.
+  const getSetCookie = (
+    res.headers as Headers & { getSetCookie?: () => string[] }
+  ).getSetCookie;
+  const cookies: string[] = getSetCookie
+    ? getSetCookie.call(res.headers)
+    : (res.headers.get("set-cookie") ?? "").split(/,(?=[^;]+=)/);
+
+  for (const c of cookies) {
+    const m = c.match(new RegExp(`(?:^|\\s)${SESSION_COOKIE_NAME}=([^;]+)`));
+    if (m) return { token: m[1] };
+  }
+  throw new Error(
+    "SIWE verify succeeded but no session cookie was returned by the server.",
+  );
+}
+
+/**
+ * Authenticated request against the agent control plane. Sends the SIWE
+ * session as a Cookie header. Throws {@link SessionExpiredError} on 401 so
+ * callers can prompt `xenarch agent login`.
+ */
+async function meAgentRequest<T>(
+  apiBase: string,
+  sessionToken: string,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const res = await fetch(`${apiBase}/v1/me/agent${path}`, {
+    method,
+    headers: {
+      Cookie: `${SESSION_COOKIE_NAME}=${sessionToken}`,
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401) {
+    throw new SessionExpiredError(await errorMessage(res));
+  }
+  if (!res.ok) {
+    throw new Error(await errorMessage(res));
+  }
+  // 204 No Content (key revoke) has no body.
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+export function getMeAgent(apiBase: string, token: string): Promise<MeAgentProfile> {
+  return meAgentRequest<MeAgentProfile>(apiBase, token, "GET", "");
+}
+
+export function getAgentSummary(
+  apiBase: string,
+  token: string,
+  period = "24h",
+): Promise<AgentSummary> {
+  return meAgentRequest<AgentSummary>(
+    apiBase,
+    token,
+    "GET",
+    `/summary?period=${period}`,
+  );
+}
+
+export function getAgentCaps(apiBase: string, token: string): Promise<AgentCaps> {
+  return meAgentRequest<AgentCaps>(apiBase, token, "GET", "/caps");
+}
+
+export function putAgentCaps(
+  apiBase: string,
+  token: string,
+  caps: AgentCapsPut,
+): Promise<AgentCaps> {
+  return meAgentRequest<AgentCaps>(apiBase, token, "PUT", "/caps", caps);
+}
+
+export function resetAgentDayCap(
+  apiBase: string,
+  token: string,
+): Promise<CapResetResult> {
+  return meAgentRequest<CapResetResult>(apiBase, token, "POST", "/caps/reset-day");
+}
+
+export function getAgentScope(apiBase: string, token: string): Promise<ScopeReadResult> {
+  return meAgentRequest<ScopeReadResult>(apiBase, token, "GET", "/scope");
+}
+
+export function putAgentScope(
+  apiBase: string,
+  token: string,
+  defaultMode: ScopeMode,
+  rules: ScopeRuleInput[],
+): Promise<ScopeReadResult> {
+  return meAgentRequest<ScopeReadResult>(apiBase, token, "PUT", "/scope", {
+    default_mode: defaultMode,
+    rules,
+  });
+}
+
+export function setAgentPause(
+  apiBase: string,
+  token: string,
+  paused: boolean,
+): Promise<PauseResult> {
+  return meAgentRequest<PauseResult>(apiBase, token, "POST", "/pause", { paused });
+}
+
+export function listAgentKeys(
+  apiBase: string,
+  token: string,
+): Promise<AgentApiKeySummary[]> {
+  return meAgentRequest<AgentApiKeySummary[]>(apiBase, token, "GET", "/keys");
+}
+
+export function createAgentKey(
+  apiBase: string,
+  token: string,
+  label: string | null,
+): Promise<AgentApiKeyIssued> {
+  return meAgentRequest<AgentApiKeyIssued>(apiBase, token, "POST", "/keys", {
+    label,
+  });
+}
+
+export function rotateAgentKey(
+  apiBase: string,
+  token: string,
+  keyId: string,
+): Promise<AgentApiKeyIssued> {
+  return meAgentRequest<AgentApiKeyIssued>(
+    apiBase,
+    token,
+    "POST",
+    `/keys/${keyId}/rotate`,
+  );
+}
+
+export function revokeAgentKey(
+  apiBase: string,
+  token: string,
+  keyId: string,
+): Promise<void> {
+  return meAgentRequest<void>(apiBase, token, "DELETE", `/keys/${keyId}`);
+}
+
+export function listAgentReceipts(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<AgentReceiptList> {
+  const qs = query ? `?${query}` : "";
+  return meAgentRequest<AgentReceiptList>(apiBase, token, "GET", `/receipts${qs}`);
 }
