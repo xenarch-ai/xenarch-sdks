@@ -1,0 +1,63 @@
+{
+  "name": "@xenarch/sdk",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Isomorphic TypeScript SDK for Xenarch — pay any HTTP 402 resource (sdk.x402) and get paid: pay-links, payments, subscribers, profile, webhooks (sdk.merchant). For human devs and AI agents. Gasless USDC on Base. 0% Xenarch fee.",
+  "keywords": [
+    "xenarch",
+    "x402",
+    "http-402",
+    "usdc",
+    "base",
+    "payment-link",
+    "ai-agent-payments",
+    "stripe-alternative",
+    "non-custodial",
+    "webhooks",
+    "sdk",
+    "isomorphic"
+  ],
+  "homepage": "https://xenarch.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xenarch-ai/xenarch-sdks",
+    "directory": "js/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/xenarch-ai/xenarch-sdks/issues"
+  },
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xenarch/core": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
