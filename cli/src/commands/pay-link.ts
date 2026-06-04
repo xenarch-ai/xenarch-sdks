@@ -43,7 +43,7 @@ export function registerPayLinkCommand(program: Command): void {
           tx_hash: res.tx_hash,
           facilitator: res.facilitator,
           wallet_address: signerAddress,
-          auth_token: null,
+          auth_token: res.auth_token,
         });
 
         if (jsonOutput) {

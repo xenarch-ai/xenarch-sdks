@@ -9,6 +9,7 @@ import { executePayment } from "./payment.js";
 import { initiateLinkPayment, claimLinkPayment } from "./api.js";
 import { loadSigner } from "./wallet.js";
 import { connectWalletConnect } from "./wc-connect.js";
+import { checkPreflight, formatDenyMessage } from "./agent-preflight.js";
 import {
   type Config,
   type GateResponse,
@@ -56,6 +57,8 @@ export interface PayLinkFlowResult {
   link_id: string;
   amount_usd: string;
   claim: PayLinkClaimResponse;
+  /** Preflight auth_token (null if the control plane was bypassed). */
+  auth_token: string | null;
 }
 
 /** Recognize a Xenarch hosted-checkout URL and pull out its link id (§12.7). */
@@ -99,6 +102,25 @@ export async function payLinkWrapped(
     );
   }
 
+  // Agent control-plane preflight (XEN-373): gate the pay-link by the agent's
+  // caps / scope / pause before settling — same enforcement gate-pay uses.
+  // No-op unless XENARCH_API_TOKEN is configured (fail-closed if it is).
+  const preflight = await checkPreflight(
+    apiBase,
+    `https://pay.xenarch.com/l/${linkId}`,
+    priceUsd,
+  );
+  if (!preflight.ok) {
+    // formatDenyMessage already prefixes "Refused by Xenarch control plane:";
+    // only the unreachable (detail) case needs the prefix added.
+    const reason =
+      "detail" in preflight
+        ? `Refused by Xenarch control plane: ${preflight.detail}`
+        : formatDenyMessage(preflight);
+    throw new Error(reason);
+  }
+  const authToken = "bypassed" in preflight ? null : preflight.auth_token;
+
   // Adapt the initiate envelope into the GateResponse shape executePayment
   // consumes. asset is the USDC contract (used for facilitator selection);
   // price_usd drives the signed transfer value.
@@ -132,6 +154,7 @@ export async function payLinkWrapped(
         link_id: linkId,
         amount_usd: priceUsd,
         claim,
+        auth_token: authToken,
       };
     } catch (err) {
       lastErr = err;
