@@ -104,11 +104,24 @@ export class WalletConnectSigner extends ethers.AbstractSigner<ethers.JsonRpcPro
   }
 
   async signTypedData(
-    _domain: ethers.TypedDataDomain,
-    _types: Record<string, ethers.TypedDataField[]>,
-    _value: Record<string, unknown>,
+    domain: ethers.TypedDataDomain,
+    types: Record<string, ethers.TypedDataField[]>,
+    value: Record<string, unknown>,
   ): Promise<string> {
-    throw new Error("signTypedData is not implemented for WalletConnect signer.");
+    // Build the full EIP-712 payload (injects EIP712Domain, resolves ENS,
+    // normalizes types) exactly as a local wallet would hash it, then hand the
+    // JSON to the remote wallet via eth_signTypedData_v4. MetaMask Mobile and
+    // other WC wallets sign the same digest, so the signature verifies against
+    // the platform identically to a local-wallet signature.
+    const payload = ethers.TypedDataEncoder.getPayload(domain, types, value);
+    return this.client.request<string>({
+      topic: this.sessionTopic,
+      chainId: this.chainId,
+      request: {
+        method: "eth_signTypedData_v4",
+        params: [this._address, JSON.stringify(payload)],
+      },
+    });
   }
 
   async sendTransaction(

@@ -3,6 +3,11 @@ import { readConfig } from "../lib/config.js";
 import { loadSigner } from "../lib/wallet.js";
 import { fetchGate, fetchWithReplay } from "../lib/api.js";
 import { executePayment } from "../lib/payment.js";
+import {
+  hostedCheckoutLinkId,
+  payLinkWrapped,
+  loadPayerSigner,
+} from "../lib/pay-link-flow.js";
 import { loadCache, cacheToken, getRecentPayment } from "../lib/token-cache.js";
 import { reportReceipt } from "../lib/agent-receipts.js";
 import { checkPreflight, formatDenyMessage } from "../lib/agent-preflight.js";
@@ -43,6 +48,46 @@ export function registerPayCommand(program: Command): void {
       }
 
       try {
+        // §12.7 auto-detect: a Xenarch hosted-checkout URL routes to the
+        // wrapped pay-link path (initiate + settle + claim) instead of the
+        // pure-x402 gate flow. `pay-link <id>` is the explicit equivalent.
+        const wrappedLinkId = hostedCheckoutLinkId(url);
+        if (wrappedLinkId) {
+          const config = await readConfig();
+          const apiBase = globals.apiBase ?? config.api_base;
+          const rpcUrl = globals.rpcUrl ?? config.rpc_url;
+          if (dryRun) {
+            const msg = {
+              dry_run: true,
+              wrapped: true,
+              link_id: wrappedLinkId,
+            };
+            console.log(
+              jsonOutput
+                ? JSON.stringify(msg)
+                : `${yellow("[DRY RUN]")} Would pay Xenarch pay-link ${wrappedLinkId} (wrapped). No transaction sent.`,
+            );
+            return;
+          }
+          const signer = await loadPayerSigner(config, rpcUrl, jsonOutput);
+          if (!jsonOutput && config.wallet?.type === "walletconnect") {
+            console.log(dim("Connected. Approve the payment on your phone…"));
+          }
+          const res = await payLinkWrapped(apiBase, wrappedLinkId, signer, {
+            maxPriceUsd: maxPrice,
+          });
+          if (jsonOutput) {
+            console.log(JSON.stringify(res));
+            return;
+          }
+          console.log(`${green("Paid Xenarch pay-link.")}
+
+  ${bold("Tx hash:")}     ${res.tx_hash}
+  ${bold("Amount:")}      $${res.amount_usd}
+  ${bold("Status:")}      ${res.claim.status === "confirmed" ? green(res.claim.status) : yellow(res.claim.status)}`);
+          return;
+        }
+
         // Short-circuit if we have a recent on-chain payment for this URL —
         // the publisher's middleware will accept the same gate_id + tx_hash
         // until its verification window closes.

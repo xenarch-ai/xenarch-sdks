@@ -22,6 +22,19 @@ import type {
   AgentApiKeySummary,
   AgentApiKeyIssued,
   AgentReceiptList,
+  PayLinkSchemaResponse,
+  PayLinkValidateResponse,
+  PayLinkCreateBody,
+  PayLinkCreateResponse,
+  PayLinkListResponse,
+  PayLinkDetail,
+  PayLinkRevokeResponse,
+  MerchantPaymentListResponse,
+  SubscriberListResponse,
+  MerchantProfileResponse,
+  MerchantProfileBody,
+  PayLinkInitiateResponse,
+  PayLinkClaimResponse,
 } from "../types.js";
 import { GATE_ID_HEADER, TX_HASH_HEADER, SESSION_COOKIE_NAME } from "../types.js";
 
@@ -494,4 +507,229 @@ export function listAgentReceipts(
 ): Promise<AgentReceiptList> {
   const qs = query ? `?${query}` : "";
   return meAgentRequest<AgentReceiptList>(apiBase, token, "GET", `/receipts${qs}`);
+}
+
+// --- Merchant ops (SIWE session on bare /v1/* paths) ----------------------
+//
+// The agent control plane lives under /v1/me/agent (see meAgentRequest).
+// Merchant routes (/v1/links, /v1/payments, /v1/subscribers,
+// /v1/merchant-profile) share the SAME xen_session cookie but sit at bare
+// /v1/* paths, so they need a sibling request helper.
+
+/**
+ * Authenticated request against merchant routes. Sends the SIWE session as a
+ * Cookie on a full `/v1/...` path. Throws {@link SessionExpiredError} on 401.
+ */
+export async function meSessionRequest<T>(
+  apiBase: string,
+  sessionToken: string,
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
+  const res = await fetch(`${apiBase}${path}`, {
+    method,
+    headers: {
+      Cookie: `${SESSION_COOKIE_NAME}=${sessionToken}`,
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(extraHeaders ?? {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401) {
+    throw new SessionExpiredError(await errorMessage(res));
+  }
+  if (!res.ok) {
+    throw new Error(await errorMessage(res));
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+/** GET /v1/links/schema — public, no auth. The create-body descriptor. */
+export async function getLinkSchema(
+  apiBase: string,
+): Promise<PayLinkSchemaResponse> {
+  const res = await fetch(`${apiBase}/v1/links/schema`);
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()) as PayLinkSchemaResponse;
+}
+
+/** POST /v1/links/validate — check a params tree before signing. */
+export function validateLink(
+  apiBase: string,
+  token: string,
+  params: Record<string, unknown>,
+): Promise<PayLinkValidateResponse> {
+  return meSessionRequest<PayLinkValidateResponse>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/links/validate",
+    { params },
+  );
+}
+
+/** POST /v1/links — create a signed pay-link. Auto idempotency key. */
+export function createLink(
+  apiBase: string,
+  token: string,
+  body: PayLinkCreateBody,
+  idempotencyKey: string,
+): Promise<PayLinkCreateResponse> {
+  return meSessionRequest<PayLinkCreateResponse>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/links",
+    body,
+    { "Idempotency-Key": idempotencyKey },
+  );
+}
+
+export function listLinks(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<PayLinkListResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<PayLinkListResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/links${qs}`,
+  );
+}
+
+export function getLinkDetail(
+  apiBase: string,
+  token: string,
+  linkId: string,
+): Promise<PayLinkDetail> {
+  return meSessionRequest<PayLinkDetail>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/links/${encodeURIComponent(linkId)}`,
+  );
+}
+
+export function revokeLink(
+  apiBase: string,
+  token: string,
+  linkId: string,
+): Promise<PayLinkRevokeResponse> {
+  return meSessionRequest<PayLinkRevokeResponse>(
+    apiBase,
+    token,
+    "DELETE",
+    `/v1/links/${encodeURIComponent(linkId)}`,
+  );
+}
+
+export function listMerchantPayments(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<MerchantPaymentListResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<MerchantPaymentListResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/payments/received${qs}`,
+  );
+}
+
+export function listSubscribers(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<SubscriberListResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<SubscriberListResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/subscribers${qs}`,
+  );
+}
+
+/** GET /v1/merchant-profile — null if the merchant has none yet. */
+export function getMerchantProfile(
+  apiBase: string,
+  token: string,
+): Promise<MerchantProfileResponse | null> {
+  return meSessionRequest<MerchantProfileResponse | null>(
+    apiBase,
+    token,
+    "GET",
+    "/v1/merchant-profile",
+  );
+}
+
+export function putMerchantProfile(
+  apiBase: string,
+  token: string,
+  body: MerchantProfileBody,
+): Promise<MerchantProfileResponse> {
+  return meSessionRequest<MerchantProfileResponse>(
+    apiBase,
+    token,
+    "PUT",
+    "/v1/merchant-profile",
+    body,
+  );
+}
+
+export function verifyMerchantDomain(
+  apiBase: string,
+  token: string,
+): Promise<MerchantProfileResponse> {
+  return meSessionRequest<MerchantProfileResponse>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/merchant-profile/verify-domain",
+  );
+}
+
+// --- wrapped pay-link payment (public x402 flow) --------------------------
+
+/**
+ * POST /v1/links/{id}/initiate — the x402 envelope for the gasless flow.
+ * Returns HTTP 402 on SUCCESS (canonical x402), so 402 is parsed as the body.
+ */
+export async function initiateLinkPayment(
+  apiBase: string,
+  linkId: string,
+): Promise<PayLinkInitiateResponse> {
+  const res = await fetch(
+    `${apiBase}/v1/links/${encodeURIComponent(linkId)}/initiate`,
+    { method: "POST" },
+  );
+  if (res.status === 402 || res.ok) {
+    return (await res.json()) as PayLinkInitiateResponse;
+  }
+  throw new Error(await errorMessage(res));
+}
+
+/** POST /v1/links/{id}/claim — record the on-chain tx against the link. */
+export async function claimLinkPayment(
+  apiBase: string,
+  linkId: string,
+  txHash: string,
+): Promise<PayLinkClaimResponse> {
+  const res = await fetch(
+    `${apiBase}/v1/links/${encodeURIComponent(linkId)}/claim`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tx_hash: txHash }),
+    },
+  );
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()) as PayLinkClaimResponse;
 }

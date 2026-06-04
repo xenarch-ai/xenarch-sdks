@@ -50,7 +50,15 @@ export async function connectWalletConnect(
   const { uri, approval } = await client.connect({
     optionalNamespaces: {
       eip155: {
-        methods: ["eth_sendTransaction", "personal_sign"],
+        // eth_signTypedData_v4 is required for EIP-712 pay-link signing and the
+        // EIP-3009 transfer used by wrapped pay-link settlement (XEN-414); the
+        // first two cover SIWE login (personal_sign) and gate pay.
+        methods: [
+          "eth_sendTransaction",
+          "personal_sign",
+          "eth_signTypedData_v4",
+          "eth_signTypedData",
+        ],
         chains: [chainId],
         events: ["chainChanged", "accountsChanged"],
       },
