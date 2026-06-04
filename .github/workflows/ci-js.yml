@@ -34,3 +34,28 @@ jobs:
 
       - name: Test
         run: npm test
+
+  build-and-test-sdk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: js/sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build (ESM + CJS + types)
+        run: npm run build
+
+      - name: Test
+        run: npm test
