@@ -1,12 +1,30 @@
-"""Xenarch Python SDK — payment middleware for AI agents."""
+"""Xenarch Python SDK — pay for and get paid through the agentic internet.
+
+Two sides, one package:
+
+- ``xenarch.x402`` — pay any HTTP 402-gated resource on the open web (pure
+  protocol; the seller never has to know about Xenarch).
+- ``xenarch.merchant`` — get paid: create and manage pay-links, read payments
+  and subscribers, manage your merchant profile.
+- ``xenarch.webhooks`` — verify incoming webhook signatures on your backend.
+
+Payments are gasless — the agent wallet only ever holds USDC.
+"""
 
 from xenarch.detection import is_bot
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 
 def __getattr__(name: str):
     """Lazy imports for modules with heavy dependencies (fastapi, httpx)."""
+    if name in {"x402", "merchant", "webhooks"}:
+        import importlib
+
+        return importlib.import_module(f"xenarch.{name}")
+    if name == "MerchantClient":
+        from xenarch.merchant import MerchantClient
+        return MerchantClient
     if name == "XenarchClient":
         from xenarch.client import XenarchClient
         return XenarchClient
@@ -32,6 +50,10 @@ def __getattr__(name: str):
 
 
 __all__ = [
+    "x402",
+    "merchant",
+    "webhooks",
+    "MerchantClient",
     "XenarchClient",
     "XenarchAPIError",
     "XenarchMiddleware",

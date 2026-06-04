@@ -1,8 +1,14 @@
-# xenarch — Python SDK for Xenarch's x402 MCP server
+# xenarch — Python SDK for the agentic internet
 
-Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402—gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement on-chain. 0% Xenarch fee — no Xenarch contract in the money flow. The agent wallet only ever holds USDC — no ETH, no other gas coin needed.
+Xenarch is the non-custodial payment SDK for the agentic internet. Pay for and get paid through HTTP 402 + USDC micropayments on Base L2. Direct, on-chain settlement. 0% Xenarch fee — no Xenarch contract in the money flow. Gasless: the wallet only ever holds USDC — no other gas coin needed.
 
-This package is the Python SDK and FastAPI middleware. Use it to (a) let LangChain / CrewAI / FastAPI agents pay any x402-gated URL, or (b) gate your own FastAPI endpoints behind HTTP 402.
+One package, two sides of the market — for both humans in scripts and AI agents in workflows:
+
+- **`xenarch.x402`** — *pay* any HTTP 402-gated resource on the open web (pure protocol; the seller never has to have heard of Xenarch).
+- **`xenarch.merchant`** — *get paid*: create and manage pay-links, read payments and subscribers, manage your merchant profile.
+- **`xenarch.webhooks`** — verify incoming webhook signatures on your backend.
+
+Plus FastAPI middleware to gate your own endpoints behind HTTP 402.
 
 ## Unlike Cloudflare Pay-Per-Crawl / TollBit
 
@@ -54,9 +60,9 @@ print(tool.invoke("https://example.com/premium-article"))
 If you've created an `xa_live_*` token from https://dash.xenarch.dev/agent/settings, set it as `XENARCH_API_TOKEN` (or pass `xenarch_token=...` to `XenarchPay`). Every `pay()` then:
 
 1. **Preflights** with the platform — server-enforced caps (per-tx, daily, monthly), scope rules (allow/deny domain patterns), and a fleet-wide kill switch. Refused payments stop before any USDC is signed.
-2. **Settles** on chain via a third-party x402 facilitator (PayAI, xpay, Heurist, etc.).
+2. **Settles** the USDC payment on Base — gasless, no gas coin needed.
 3. **Reports the receipt** back to the dashboard.
-4. **On settle failure** (facilitator down, replay rejected by the gate), POSTs a `status='failed'` receipt with the preflight's auth_token so the platform refunds the cap charge. Operators don't lose budget for payments that didn't land.
+4. **On settle failure** (settlement unavailable, replay rejected by the gate), POSTs a `status='failed'` receipt with the preflight's auth_token so the platform refunds the cap charge. Operators don't lose budget for payments that didn't land.
 
 ```bash
 export XENARCH_API_TOKEN=xa_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -126,6 +132,69 @@ async def premium_article():
 ```
 
 The decorator returns HTTP 402 with the price when called without payment, verifies the USDC transfer to the publisher's wallet on-chain, and grants access with a time-limited Bearer token.
+
+## Get paid: `xenarch.merchant`
+
+Everything the dashboard does — callable from a script or an AI agent. Merchant ops reuse the SIWE session you establish with the CLI (`xenarch agent login`); creating a pay-link signs the link template with your wallet.
+
+```python
+from xenarch.merchant import MerchantClient
+
+# Reuse the CLI's logged-in session + wallet from ~/.xenarch/config.json
+mc = MerchantClient.from_config()
+# ...or pass credentials explicitly:
+# mc = MerchantClient(session_token="...", private_key="0x...")
+
+# Read-only ops need no signing key
+links = mc.links.list(limit=10)
+payments = mc.payments.list(limit=20)
+subs = mc.subscribers.list(status="active")
+profile = mc.profile.show()
+```
+
+### Create a pay-link (validate → sign → create)
+
+```python
+params = {
+    "to":       {"state": "lit", "value": "0xYourWallet..."},
+    "amount":   {"state": "lit", "value": "50.00"},
+    "currency": {"state": "lit", "value": "USDC"},
+    "network":  {"state": "lit", "value": "base"},
+    "kind":     {"state": "lit", "value": "checkout"},
+    # ...plus any other fields from mc.links.schema()
+}
+
+# Check before signing — returns {ok, missing, errors} with field-level prompts
+mc.links.validate(params)
+
+# Signing commits your wallet to the terms, so it's confirm-gated:
+link = mc.links.create(params, confirm=True)
+print(link["link"])            # the hosted checkout URL
+secret = link["webhook_secret"]  # shown once — store it now
+
+mc.links.revoke(link["link_id"], confirm=True)
+```
+
+`create` always validates first, so "validate ok ⇒ create ok". An `Idempotency-Key` is generated per create, which dedupes a network-level retry of that one request (re-running `create` mints a fresh nonce, so it makes a new link).
+
+Signing and revoking require `confirm=True` by default — a guard against a stray agent call committing funds or killing a live link. Trusted scripts can opt out once with `MerchantClient(..., require_confirm=False)`.
+
+## Verify webhooks: `xenarch.webhooks`
+
+Each pay-link can POST events to your server, signed with `X-Xenarch-Signature: sha256=<hex>` (HMAC-SHA256 of the raw body, keyed by the link's `whsec_...` secret). Verify before trusting the payload — the same shape as Stripe / GitHub webhooks.
+
+```python
+from xenarch import webhooks
+
+@app.post("/xenarch-webhook")
+async def hook(request):
+    body = await request.body()             # raw bytes — don't re-serialize
+    sig = request.headers["X-Xenarch-Signature"]
+    if not webhooks.verify(body, sig, secret):
+        return Response(status_code=401)
+    event = json.loads(body)
+    ...
+```
 
 ## Env vars
 
