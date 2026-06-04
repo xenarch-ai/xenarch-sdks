@@ -1,10 +1,9 @@
 """Facilitator Router — selects an x402 facilitator per payment.
 
-Implements `Information/design/facilitator-router.md`. The Router picks a
-ranked fallback list of facilitators for each payment based on a weighted
-score (fee, gas sponsorship, spec compliance, observed uptime, observed
-latency, publisher preference). Failed settlements are recorded as
-passive health signals; a facilitator that exceeds the failure threshold
+The Router picks a ranked fallback list of settlement providers for each
+payment based on a weighted score (fee, spec compliance, observed uptime,
+observed latency, publisher preference). Failed settlements are recorded as
+passive health signals; a provider that exceeds the failure threshold
 within the rolling window is circuit-broken for the cooldown period.
 
 The Router only selects from facilitators it was constructed with (its
@@ -24,23 +23,18 @@ from enum import Enum
 from typing import Callable, Sequence
 
 
-# §9 — default facilitator stack. Coinbase is configurable, never default.
-DEFAULT_FACILITATOR_STACK: tuple["FacilitatorConfig", ...]
-# (Defined after FacilitatorConfig.)
-
-# §6.1 circuit breaker defaults.
+# Circuit breaker defaults.
 DEFAULT_FAILURE_THRESHOLD = 5
 DEFAULT_FAILURE_WINDOW_S = 60.0
 DEFAULT_COOLDOWN_S = 300.0
 
-# §5.2 weights — sum to 1.0.
+# Selection weights — sum to 1.0.
 DEFAULT_WEIGHTS: dict[str, float] = {
-    "fee": 0.30,
-    "gas": 0.25,
-    "spec": 0.10,
-    "uptime": 0.15,
-    "latency": 0.10,
-    "preference": 0.10,
+    "fee": 0.35,
+    "spec": 0.15,
+    "uptime": 0.20,
+    "latency": 0.15,
+    "preference": 0.15,
 }
 
 
@@ -58,29 +52,8 @@ class FacilitatorConfig:
     url: str
     spec_version: str = "v2"
     fee_bps: int = 0
-    gas_sponsored: bool = True
     supported_chains: frozenset[str] = frozenset({"base"})
     supported_assets: frozenset[str] = frozenset({"USDC"})
-
-
-DEFAULT_FACILITATOR_STACK = (
-    FacilitatorConfig(
-        name="PayAI",
-        url="https://facilitator.payai.network",
-    ),
-    FacilitatorConfig(
-        name="xpay",
-        url="https://facilitator.xpay.dev",
-    ),
-    FacilitatorConfig(
-        name="Ultravioleta DAO",
-        url="https://x402.ultravioletadao.xyz",
-    ),
-    FacilitatorConfig(
-        name="x402.rs",
-        url="https://x402.rs",
-    ),
-)
 
 
 @dataclass
@@ -115,18 +88,16 @@ class Router:
 
     def __init__(
         self,
-        facilitators: Sequence[FacilitatorConfig] | None = None,
+        facilitators: Sequence[FacilitatorConfig],
         weights: dict[str, float] | None = None,
         failure_threshold: int = DEFAULT_FAILURE_THRESHOLD,
         failure_window_s: float = DEFAULT_FAILURE_WINDOW_S,
         cooldown_s: float = DEFAULT_COOLDOWN_S,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        configs = (
-            list(facilitators) if facilitators is not None else list(DEFAULT_FACILITATOR_STACK)
-        )
+        configs = list(facilitators)
         if not configs:
-            raise ValueError("Router requires at least one facilitator")
+            raise ValueError("Router requires at least one settlement provider")
         # Preserve insertion order; dict is ordered in Py3.7+.
         self._states: dict[str, _FacilitatorState] = {
             c.url: _FacilitatorState(config=c) for c in configs
@@ -231,7 +202,6 @@ class Router:
         w = self._weights
         # Fee: 0bps → 1.0, 100bps+ → 0.0. Linear in between.
         fee_component = 1.0 - min(cfg.fee_bps / 100.0, 1.0)
-        gas_component = 1.0 if cfg.gas_sponsored else 0.0
         spec_component = 1.0 if cfg.spec_version == "v2" else 0.5
         uptime_component = self._uptime_component(state, now)
         latency_component = self._latency_component(state)
@@ -243,7 +213,6 @@ class Router:
             preference_component = 0.0
         return (
             w["fee"] * fee_component
-            + w["gas"] * gas_component
             + w["spec"] * spec_component
             + w["uptime"] * uptime_component
             + w["latency"] * latency_component

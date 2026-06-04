@@ -42,7 +42,6 @@ def __getattr__(name: str):
         "FacilitatorConfig",
         "PaymentContext",
         "HealthState",
-        "DEFAULT_FACILITATOR_STACK",
     }:
         from xenarch import router as _router
         return getattr(_router, name)
@@ -63,5 +62,4 @@ __all__ = [
     "FacilitatorConfig",
     "PaymentContext",
     "HealthState",
-    "DEFAULT_FACILITATOR_STACK",
 ]

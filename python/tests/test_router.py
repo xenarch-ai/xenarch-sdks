@@ -11,7 +11,6 @@ import pytest
 
 from xenarch.router import (
     DEFAULT_COOLDOWN_S,
-    DEFAULT_FACILITATOR_STACK,
     DEFAULT_FAILURE_THRESHOLD,
     DEFAULT_FAILURE_WINDOW_S,
     DEFAULT_WEIGHTS,
@@ -36,26 +35,8 @@ class FakeClock:
 # --- Construction & defaults ---------------------------------------------------
 
 
-def test_default_stack_has_four_facilitators():
-    assert len(DEFAULT_FACILITATOR_STACK) == 4
-    names = {f.name for f in DEFAULT_FACILITATOR_STACK}
-    assert names == {"PayAI", "xpay", "Ultravioleta DAO", "x402.rs"}
-
-
-def test_default_stack_excludes_coinbase():
-    for f in DEFAULT_FACILITATOR_STACK:
-        assert "coinbase" not in f.name.lower()
-        assert "coinbase" not in f.url.lower()
-
-
 def test_default_weights_sum_to_one():
     assert abs(sum(DEFAULT_WEIGHTS.values()) - 1.0) < 1e-9
-
-
-def test_router_uses_default_stack_when_none_provided():
-    r = Router()
-    urls = [c.url for c in r.registered]
-    assert urls == [c.url for c in DEFAULT_FACILITATOR_STACK]
 
 
 def test_router_rejects_empty_facilitator_list():
@@ -109,13 +90,6 @@ def test_lower_fee_ranks_higher():
     r = _make_router(pricey, cheap)
     picks = r.select()
     assert picks[0].url == "https://cheap"
-
-
-def test_gas_sponsored_outranks_unsponsored_when_otherwise_equal():
-    sponsored = FacilitatorConfig(name="A", url="https://a", gas_sponsored=True)
-    unsponsored = FacilitatorConfig(name="B", url="https://b", gas_sponsored=False)
-    r = _make_router(unsponsored, sponsored)
-    assert r.select()[0].url == "https://a"
 
 
 def test_v2_outranks_older_spec_when_otherwise_equal():
@@ -318,14 +292,14 @@ def test_payment_context_amount_does_not_filter_by_default():
 
 def test_custom_weights_override_defaults():
     """Caller-supplied weights replace the defaults wholesale."""
-    a = FacilitatorConfig(name="cheap", url="https://a", fee_bps=80)
-    b = FacilitatorConfig(name="sponsored", url="https://b", fee_bps=0, gas_sponsored=False)
-    # If we crank gas to 1.0 and zero out fee, the unsponsored "b" should
-    # lose despite having the better fee. Verifies the weights actually
-    # propagate into _score().
-    weights = {"fee": 0.0, "gas": 1.0, "spec": 0.0, "uptime": 0.0, "latency": 0.0, "preference": 0.0}
-    r = Router(facilitators=[a, b], weights=weights, clock=FakeClock())
-    assert r.select()[0].url == "https://a"
+    older = FacilitatorConfig(name="v1", url="https://a", spec_version="v1", fee_bps=0)
+    newer = FacilitatorConfig(name="v2", url="https://b", spec_version="v2", fee_bps=80)
+    # Put all weight on spec and zero out fee: the newer-spec "b" should win
+    # despite its worse fee. Verifies the weights actually propagate into
+    # _score().
+    weights = {"fee": 0.0, "spec": 1.0, "uptime": 0.0, "latency": 0.0, "preference": 0.0}
+    r = Router(facilitators=[older, newer], weights=weights, clock=FakeClock())
+    assert r.select()[0].url == "https://b"
 
 
 def test_empty_publisher_list_behaves_like_none():
