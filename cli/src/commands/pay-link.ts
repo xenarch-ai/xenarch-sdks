@@ -35,7 +35,7 @@ export function registerPayLinkCommand(program: Command): void {
 
         // Report to the agent control plane (best-effort; no-op without a token).
         await reportReceipt(config.api_base, {
-          url: `${apiBase}/v1/links/${id}`,
+          url: `https://pay.xenarch.com/l/${id}`,
           amount_usd: res.amount_usd,
           source: "cli",
           status: res.claim.status === "confirmed" ? "paid" : "pending",
