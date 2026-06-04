@@ -353,3 +353,197 @@ export interface AgentReceiptList {
   page: number;
   per_page: number;
 }
+
+// --- Merchant ops (SIWE: /v1/links, /v1/payments, /v1/subscribers,
+//     /v1/merchant-profile). Mirrors the platform schemas. USD amounts are
+//     JSON strings (Decimal); never do float math on them. ---
+
+/** GET /v1/links/schema — one field of the create-body descriptor. */
+export interface PayLinkSchemaField {
+  field: string;
+  group: string;
+  type: string;
+  required: boolean;
+  state: string;
+  prompt: string;
+  advanced: boolean;
+  enum: string[] | null;
+  default: string | null;
+  auto_fill: string | null;
+  help: string | null;
+}
+
+export interface PayLinkSchemaResponse {
+  version: string;
+  currency: { default: string; supported: string[] };
+  network: { default: string; supported: string[] };
+  max_amount_usd: string;
+  fields: PayLinkSchemaField[];
+}
+
+/** POST /v1/links/validate — one problem with a field. */
+export interface PayLinkFieldIssue {
+  field: string;
+  message: string;
+  prompt?: string | null;
+  group?: string | null;
+  type?: string | null;
+  enum?: string[] | null;
+}
+
+export interface PayLinkValidateResponse {
+  ok: boolean;
+  missing: PayLinkFieldIssue[];
+  errors: PayLinkFieldIssue[];
+}
+
+/** A tagged param value: lit fields carry a value; tok/auto declare a slot. */
+export interface LitValue {
+  state: "lit";
+  value: unknown;
+}
+
+/** POST /v1/links body. `params` is the tagged tree; the rest is the signature. */
+export interface PayLinkCreateBody {
+  params: Record<string, unknown>;
+  nonce: string;
+  created_at: number;
+  signed_params: string;
+}
+
+export interface PayLinkCreateResponse {
+  link_id: string;
+  link: string;
+  qr_png_url: string | null;
+  embed_html: string | null;
+  webhook_secret: string;
+  signed_params: string;
+  created_at: string;
+}
+
+export interface PayLinkListItem {
+  link_id: string;
+  created_at: string;
+  expires_at: string | null;
+  kind: string;
+  status: string;
+  paid_and_single_use: boolean;
+  paid_count: number;
+  amount_usd: string | null;
+  cadence: string | null;
+}
+
+export interface PayLinkListResponse {
+  links: PayLinkListItem[];
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
+/** GET /v1/links/{id} owner detail — permissive; we surface key fields + raw. */
+export interface PayLinkDetail {
+  link_id: string;
+  kind: string;
+  status: string;
+  created_at: string;
+  expires_at: string | null;
+  link?: string;
+  params?: Record<string, unknown>;
+  stats?: Record<string, unknown>;
+  latest_payment?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface PayLinkRevokeResponse {
+  revoked: boolean;
+  link_id: string;
+  revoked_at: string | null;
+}
+
+export interface MerchantPaymentItem {
+  id: string;
+  link_id: string;
+  tx_hash: string;
+  from_address: string;
+  amount_usd: string;
+  expected_usd: string;
+  status: string;
+  subscription_id: string | null;
+  cycle: number | null;
+  created_at: string;
+}
+
+export interface MerchantPaymentListResponse {
+  payments: MerchantPaymentItem[];
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
+export interface SubscriberListItem {
+  subscription_id: string;
+  pay_link_id: string;
+  payer_email: string | null;
+  payer_wallet: string | null;
+  mode: "reminder" | "permit" | "stream";
+  status: string;
+  email_status: string;
+  cycles_paid: number;
+  next_renewal_at: string | null;
+  last_renewal_at: string | null;
+  created_at: string;
+  amount_usd: string | null;
+  cadence: string | null;
+}
+
+export interface SubscriberListResponse {
+  subscribers: SubscriberListItem[];
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
+/** Writable merchant-profile fields (PUT body). */
+export interface MerchantProfileBody {
+  issuer_name?: string | null;
+  issuer_logo_url?: string | null;
+  issuer_address?: string | null;
+  issuer_tax_id?: string | null;
+  issuer_email?: string | null;
+  merchant_site?: string | null;
+  brand_color?: string | null;
+  collection_rhythm?: "daily" | "weekly" | "monthly" | "never" | null;
+}
+
+/** GET/PUT /v1/merchant-profile response. */
+export interface MerchantProfileResponse extends MerchantProfileBody {
+  id: string;
+  identity_id: string;
+  updated_at: string;
+  verification_token: string;
+  domain_verified_at: string | null;
+}
+
+/** POST /v1/links/{id}/initiate — x402 envelope (returned with HTTP 402). */
+export interface PayLinkInitiateResponse {
+  x402Version: number;
+  accepts: PaymentRequirements[];
+  facilitators: FacilitatorOption[];
+  link_id: string;
+  network: string;
+  asset: string;
+  protocol: string;
+  expires: string | null;
+  error: string | null;
+}
+
+/** POST /v1/links/{id}/claim — payment attempt recorded from the on-chain tx. */
+export interface PayLinkClaimResponse {
+  attempt_id: string;
+  tx_hash: string;
+  status: "confirmed" | "underpaid" | "overpaid";
+  value_usdc: string;
+  expected_usdc: string;
+  block_number: number;
+  paid_and_single_use: boolean;
+  created: boolean;
+  manage_url: string | null;
+}

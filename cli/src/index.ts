@@ -11,6 +11,11 @@ import { registerSitesCommand } from "./commands/sites.js";
 import { registerStatsCommand } from "./commands/stats.js";
 import { registerPayoutCommand } from "./commands/payout.js";
 import { registerAgentCommands } from "./commands/agent.js";
+import { registerLinksCommands } from "./commands/links.js";
+import { registerPaymentsCommands } from "./commands/payments.js";
+import { registerSubscribersCommands } from "./commands/subscribers.js";
+import { registerProfileCommands } from "./commands/profile.js";
+import { registerPayLinkCommand } from "./commands/pay-link.js";
 
 /**
  * Resolve the package version from package.json so `--version` never drifts
@@ -48,6 +53,13 @@ export function createProgram(): Command {
 
   // Agent control plane (SIWE session)
   registerAgentCommands(program);
+
+  // Merchant ops (SIWE session) — links / payments / subscribers / profile
+  registerLinksCommands(program);
+  registerPaymentsCommands(program);
+  registerSubscribersCommands(program);
+  registerProfileCommands(program);
+  registerPayLinkCommand(program);
 
   // Publisher commands
   registerLoginCommand(program);
