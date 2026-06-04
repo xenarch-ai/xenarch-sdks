@@ -1,6 +1,6 @@
 [project]
 name = "xenarch"
-version = "1.0.0"
+version = "1.0.1"
 description = "Xenarch is the non-custodial payment SDK for the agentic internet. Pay for any HTTP 402–gated resource with USDC micropayments on Base L2 (xenarch.x402), and get paid — create and manage pay-links, read payments and subscribers, verify webhooks (xenarch.merchant). Works for humans in scripts and AI agents in workflows. 0% Xenarch fee. Gasless: the wallet only ever holds USDC — no gas coin needed."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -66,7 +66,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.sdist]
-exclude = ["tests/", "uv.lock"]
+# scripts/ holds dev/smoke utilities (not part of the importable package);
+# excluded so they don't ship to PyPI.
+exclude = ["tests/", "uv.lock", "scripts/"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["xenarch"]
