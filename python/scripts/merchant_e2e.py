@@ -26,11 +26,7 @@ import argparse
 import sys
 
 from xenarch import webhooks
-from xenarch.merchant import (
-    MerchantClient,
-    PayLinkValidationError,
-    SessionExpiredError,
-)
+from xenarch.merchant import MerchantClient, SessionExpiredError
 from xenarch.merchant._session import load_config
 
 PASS = "\033[32mPASS\033[0m"
