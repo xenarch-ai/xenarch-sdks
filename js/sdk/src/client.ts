@@ -14,7 +14,6 @@ import {
   verifyMerchantDomain,
   signPayLink,
   stringifyNumbers,
-  loadConfig,
   SessionExpiredError,
   type XenarchConfig,
   type GateResponse,
@@ -96,22 +95,23 @@ export class Xenarch {
 
   /**
    * Build a client from the CLI's `~/.xenarch/config.json` (Node only).
-   * Pulls the SIWE session, api base, and signing key. Throws
-   * `SessionExpiredError` if no session is stored.
+   * Pulls the SIWE session, api base, and — for a local wallet — the signing
+   * key the session belongs to. Throws `SessionExpiredError` if no session is
+   * stored.
    */
   static async fromConfig(
     options: { requireConfirm?: boolean; apiBase?: string } = {},
   ): Promise<Xenarch> {
-    const { config } = await loadConfig();
-    if (!config.sessionToken) {
+    const cli = await readCliConfig();
+    if (!cli.sessionToken) {
       throw new SessionExpiredError(
         "no session in config — run `xenarch agent login` first",
       );
     }
     return new Xenarch({
-      sessionToken: config.sessionToken,
-      privateKey: config.privateKey || undefined,
-      apiBase: options.apiBase ?? config.apiBase ?? DEFAULT_API_BASE,
+      sessionToken: cli.sessionToken,
+      privateKey: cli.privateKey,
+      apiBase: options.apiBase ?? cli.apiBase ?? DEFAULT_API_BASE,
       requireConfirm: options.requireConfirm,
     });
   }
@@ -335,6 +335,47 @@ class ProfileApi {
 }
 
 // --- helpers ---------------------------------------------------------------
+
+interface CliConfig {
+  sessionToken?: string;
+  privateKey?: string;
+  apiBase?: string;
+}
+
+/**
+ * Read the CLI's `~/.xenarch/config.json` directly (Node only).
+ *
+ * The signing key MUST be the wallet the SIWE session belongs to, or the
+ * platform rejects a create with a signature mismatch. The CLI stores it
+ * nested under `wallet.private_key` for a local wallet — we read that
+ * explicitly (a `walletconnect` wallet has no local key, so signing ops are
+ * unavailable). This mirrors the Python SDK's `from_config`.
+ */
+async function readCliConfig(): Promise<CliConfig> {
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const fs = await import("node:fs/promises");
+  const file = path.join(os.homedir(), ".xenarch", "config.json");
+  let raw: string;
+  try {
+    raw = await fs.readFile(file, "utf-8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw err;
+  }
+  const cfg = JSON.parse(raw) as Record<string, unknown>;
+  const wallet = (cfg.wallet as Record<string, unknown> | undefined) ?? {};
+  const privateKey =
+    wallet.type === "local" && typeof wallet.private_key === "string"
+      ? wallet.private_key
+      : undefined;
+  return {
+    sessionToken:
+      typeof cfg.session_token === "string" ? cfg.session_token : undefined,
+    apiBase: typeof cfg.api_base === "string" ? cfg.api_base : undefined,
+    privateKey,
+  };
+}
 
 /** Pull the 5 required lit values from a tagged-shape params tree. */
 function extractLit(params: Record<string, unknown>): PayLinkLit {
