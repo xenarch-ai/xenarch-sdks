@@ -81,19 +81,36 @@ Settles USDC on Base, agent wallet to seller wallet, gasless. The agent wallet o
 
 ## Verify webhooks: `sdk.webhooks`
 
-Each pay-link can POST events to your server, signed with `X-Xenarch-Signature: sha256=<hex>` (HMAC-SHA256 of the raw body, keyed by the link's `whsec_...` secret). Verify before trusting the payload — the same shape as Stripe / GitHub webhooks. Isomorphic (Web Crypto), so it runs on edge too.
+Both **pay-links** and **agents** POST events to your server. Each delivery is signed with a Stripe-style timestamped signature:
+
+```
+X-Xenarch-Signature: t=<unix_seconds>,v1=<hex>     // v1 = HMAC_SHA256(secret, "<t>.<raw_body>")
+X-Xenarch-Event:     <event_type>                  // payment.confirmed, cap.exceeded, ...
+X-Xenarch-Delivery:  <uuid>                         // idempotency key — dedupe retries on this
+```
+
+Signing the timestamp makes a captured delivery un-replayable: `verify` rejects any request whose `t` is more than 5 minutes (default) from now. `verify` works for **either** surface — one call. Isomorphic (Web Crypto), so it runs on edge too.
 
 ```ts
 import { webhooks } from "@xenarch/sdk";
 
-// e.g. inside a Hono / Next route handler
+// e.g. inside an Express / Hono / Next route handler
 const raw = await request.text();                 // raw body, not a parsed object
 const sig = request.headers.get("X-Xenarch-Signature");
 if (!(await webhooks.verify(raw, sig, secret))) {
   return new Response("bad signature", { status: 401 });
 }
-const event = JSON.parse(raw);
+const event = JSON.parse(raw);                     // event.event_type tells you which
 ```
+
+The `secret` is the pay-link's `whsec_...` (from link create / the dashboard webhook card) or the agent's `whsec_...` (rotate it on `/agent/settings`). Tune the replay window with `webhooks.verify(raw, sig, secret, { toleranceSeconds: 600 })`.
+
+### Event taxonomy
+
+| Surface | Events |
+|---|---|
+| Pay-link | `payment.confirmed`, `payment.underpaid`, `payment.overpaid`, `subscription.renewed` |
+| Agent | `payment.confirmed`, `cap.exceeded`, `scope.denied`, `key.rotated` |
 
 ## Links
 

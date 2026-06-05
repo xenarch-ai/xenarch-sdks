@@ -181,20 +181,37 @@ Signing and revoking require `confirm=True` by default — a guard against a str
 
 ## Verify webhooks: `xenarch.webhooks`
 
-Each pay-link can POST events to your server, signed with `X-Xenarch-Signature: sha256=<hex>` (HMAC-SHA256 of the raw body, keyed by the link's `whsec_...` secret). Verify before trusting the payload — the same shape as Stripe / GitHub webhooks.
+Both **pay-links** and **agents** POST events to your server. Each delivery is signed with a Stripe-style timestamped signature:
+
+```
+X-Xenarch-Signature: t=<unix_seconds>,v1=<hex>     # v1 = HMAC_SHA256(secret, "<t>.<raw_body>")
+X-Xenarch-Event:     <event_type>                  # payment.confirmed, cap.exceeded, ...
+X-Xenarch-Delivery:  <uuid>                         # idempotency key — dedupe retries on this
+```
+
+Signing the timestamp makes a captured delivery un-replayable: `verify` rejects any request whose `t` is more than 5 minutes (default) from now. `verify` works for **either** surface — one call.
 
 ```python
 from xenarch import webhooks
 
-@app.post("/xenarch-webhook")
+@app.post("/xenarch-webhook")            # FastAPI
 async def hook(request):
     body = await request.body()             # raw bytes — don't re-serialize
     sig = request.headers["X-Xenarch-Signature"]
     if not webhooks.verify(body, sig, secret):
         return Response(status_code=401)
-    event = json.loads(body)
+    event = json.loads(body)                # event["event_type"] tells you which
     ...
 ```
+
+The `secret` is the pay-link's `whsec_...` (from link create / the dashboard webhook card) or the agent's `whsec_...` (rotate it on `/agent/settings`). Tune the replay window with `webhooks.verify(body, sig, secret, tolerance_seconds=600)`.
+
+### Event taxonomy
+
+| Surface | Events |
+|---|---|
+| Pay-link | `payment.confirmed`, `payment.underpaid`, `payment.overpaid`, `subscription.renewed` |
+| Agent | `payment.confirmed`, `cap.exceeded`, `scope.denied`, `key.rotated` |
 
 ## Env vars
 
