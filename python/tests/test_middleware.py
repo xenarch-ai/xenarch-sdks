@@ -182,6 +182,57 @@ class TestXenarchMiddleware:
             assert mock_verify.call_count == 1
 
     @pytest.mark.asyncio
+    async def test_inbound_x_payment_settles_and_passes_through(
+        self, async_client, mock_gate, mock_verified
+    ):
+        # C10 (XEN-457): a vanilla x402 agent sends X-PAYMENT (no canonical
+        # headers). Middleware mints a gate + settles via the platform, then
+        # serves the content.
+        with patch(
+            "xenarch.middleware.XenarchClient.create_gate",
+            new_callable=AsyncMock,
+            return_value=mock_gate,
+        ), patch(
+            "xenarch.middleware.XenarchClient.settle_x402",
+            new_callable=AsyncMock,
+            return_value=mock_verified,
+        ) as mock_settle:
+            resp = await async_client.get(
+                "/article",
+                headers={
+                    "user-agent": "some-x402-agent/1.0",
+                    "x-payment": "eyJ4NDAyVmVyc2lvbiI6MX0=",
+                },
+            )
+        assert resp.status_code == 200
+        assert resp.json() == {"content": "premium article"}
+        mock_settle.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_inbound_x_payment_rejected_falls_through_to_402(
+        self, async_client, mock_gate
+    ):
+        # A bad/unsettleable X-PAYMENT must NOT fail open — the agent is a
+        # bot, so it falls through to the normal 402.
+        with patch(
+            "xenarch.middleware.XenarchClient.create_gate",
+            new_callable=AsyncMock,
+            return_value=mock_gate,
+        ), patch(
+            "xenarch.middleware.XenarchClient.settle_x402",
+            new_callable=AsyncMock,
+            side_effect=XenarchAPIError(400, "Malformed X-PAYMENT header"),
+        ):
+            resp = await async_client.get(
+                "/article",
+                headers={
+                    "user-agent": "GPTBot/1.0",
+                    "x-payment": "not-valid",
+                },
+            )
+        assert resp.status_code == 402
+
+    @pytest.mark.asyncio
     async def test_partial_payment_headers_treated_as_unverified(
         self, async_client, mock_gate
     ):

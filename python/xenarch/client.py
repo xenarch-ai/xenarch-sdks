@@ -162,6 +162,30 @@ class XenarchClient:
 
         raise XenarchAPIError(resp.status_code, resp.text)
 
+    async def settle_x402(
+        self,
+        gate_id: uuid.UUID | str,
+        x_payment: str,
+        facilitator: str | None = None,
+    ) -> VerifiedPaymentResponse:
+        """Settle + verify an inbound vanilla x402 ``X-PAYMENT`` (C10 / XEN-457).
+
+        For a third-party x402 agent that pays a Xenarch-gated resource with a
+        standard ``X-PAYMENT`` voucher instead of the canonical
+        ``X-Xenarch-Tx-Hash`` header. The platform routes settlement through a
+        facilitator (Xenarch never broadcasts) and verifies the on-chain
+        Transfer. Idempotent on (gate, tx_hash) like ``verify_payment``.
+        """
+        body: dict = {"x_payment": x_payment}
+        if facilitator is not None:
+            body["facilitator"] = facilitator
+        resp = await self._client.post(f"/gates/{gate_id}/settle-x402", json=body)
+
+        if resp.status_code == 200:
+            return VerifiedPaymentResponse.model_validate(resp.json())
+
+        raise XenarchAPIError(resp.status_code, resp.text)
+
     async def get_gate(self, gate_id: uuid.UUID | str) -> GateStatusResponse:
         """Get gate status."""
         resp = await self._client.get(f"/gates/{gate_id}")

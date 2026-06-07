@@ -13,7 +13,7 @@ Payments are gasless — the agent wallet only ever holds USDC.
 
 from xenarch.detection import is_bot
 
-__version__ = "1.0.0"
+__version__ = "1.2.0"
 
 
 def __getattr__(name: str):

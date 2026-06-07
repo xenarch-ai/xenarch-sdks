@@ -32,6 +32,11 @@ logger = logging.getLogger("xenarch.middleware")
 
 GATE_ID_HEADER = b"x-xenarch-gate-id"
 TX_HASH_HEADER = b"x-xenarch-tx-hash"
+# C10 (XEN-457): vanilla x402 inbound. A third-party x402 agent that knows
+# nothing about Xenarch pays with the standard ``X-PAYMENT`` voucher header
+# instead of the canonical (gate_id, tx_hash) pair. We mint a gate for the
+# path and let the platform settle + verify it.
+X_PAYMENT_HEADER = b"x-payment"
 
 
 class XenarchMiddleware:
@@ -100,6 +105,7 @@ class XenarchMiddleware:
         headers = dict(scope.get("headers", []))
         gate_id = headers.get(GATE_ID_HEADER, b"").decode("latin-1").strip()
         tx_hash = headers.get(TX_HASH_HEADER, b"").decode("latin-1").strip()
+        x_payment = headers.get(X_PAYMENT_HEADER, b"").decode("latin-1").strip()
 
         if gate_id and tx_hash:
             if self._cache_hit(gate_id, tx_hash):
@@ -122,6 +128,31 @@ class XenarchMiddleware:
                 )
             else:
                 self._cache_set(gate_id, tx_hash)
+                await self.app(scope, receive, send)
+                return
+
+        # C10: vanilla x402 inbound. The agent sent an ``X-PAYMENT`` voucher
+        # but not the canonical (gate_id, tx_hash) pair. Mint a gate for this
+        # path and have the platform settle the voucher via a facilitator +
+        # verify the on-chain Transfer. On success, serve the content.
+        elif x_payment:
+            try:
+                client = self._get_client()
+                gate = await client.create_gate(url=path)
+                verified = await client.settle_x402(gate.gate_id, x_payment)
+            except XenarchAPIError as exc:
+                logger.info(
+                    "Xenarch X-PAYMENT settle rejected path=%s status=%s",
+                    path,
+                    exc.status_code,
+                )
+            except Exception:
+                logger.warning(
+                    "Xenarch X-PAYMENT settle call failed — falling through to gate",
+                    exc_info=True,
+                )
+            else:
+                self._cache_set(str(verified.gate_id), verified.tx_hash)
                 await self.app(scope, receive, send)
                 return
 
