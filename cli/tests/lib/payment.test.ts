@@ -314,6 +314,8 @@ describe("executePaymentV1Inline", () => {
     );
     expect(res.tx_hash).toBe("0x" + "ab".repeat(32));
     expect(res.pay_to).toBe(TEST_SELLER);
+    // XEN-466: the unlocked content the buyer paid for is returned, not dropped.
+    expect(res.content).toBe("content");
 
     // The replay GET carries a base64 X-PAYMENT voucher signed to the seller.
     const init = vi.mocked(globalThis.fetch).mock.calls[0][1] as RequestInit;
