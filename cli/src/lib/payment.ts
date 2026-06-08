@@ -360,7 +360,12 @@ export async function executePaymentV1Inline(
   accept: PaymentRequirements,
   amount: bigint,
   signer: ethers.Signer,
-): Promise<{ tx_hash: string | null; pay_to: string }> {
+): Promise<{
+  tx_hash: string | null;
+  pay_to: string;
+  content: string;
+  contentType: string | null;
+}> {
   const signed = await signEip3009(signer, accept, amount);
   const header = Buffer.from(JSON.stringify(signed), "utf8").toString("base64");
 
@@ -390,6 +395,17 @@ export async function executePaymentV1Inline(
     );
   }
 
+  // The whole point of paying: read the unlocked content. Read it once,
+  // before touching headers. Guarded so a body-read hiccup can't turn an
+  // already-settled payment into a thrown "failure".
+  const contentType = res.headers.get("content-type");
+  let content = "";
+  try {
+    content = await res.text();
+  } catch {
+    content = "";
+  }
+
   let txHash: string | null = null;
   const respHeader = res.headers.get("x-payment-response");
   if (respHeader) {
@@ -403,5 +419,5 @@ export async function executePaymentV1Inline(
     }
   }
 
-  return { tx_hash: txHash, pay_to: accept.payTo };
+  return { tx_hash: txHash, pay_to: accept.payTo, content, contentType };
 }

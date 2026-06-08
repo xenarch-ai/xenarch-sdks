@@ -28,6 +28,31 @@ function isValidUrl(s: string): boolean {
 }
 
 /**
+ * Format paid-for content for human output (XEN-466): pretty-print JSON, show
+ * text as-is, and summarize binary instead of dumping raw bytes to the terminal.
+ */
+function formatPaidContent(body: string, contentType: string | null): string {
+  const ct = (contentType ?? "").toLowerCase();
+  const textLike =
+    ct === "" ||
+    ct.startsWith("text/") ||
+    /(json|xml|csv|yaml|javascript|html|x-www-form-urlencoded)/.test(ct);
+  if (!textLike) {
+    return dim(
+      `[${contentType ?? "binary"} content — ${Buffer.byteLength(body, "utf8")} bytes, not shown]`,
+    );
+  }
+  if (ct.includes("json")) {
+    try {
+      return JSON.stringify(JSON.parse(body), null, 2);
+    } catch {
+      // header says JSON but body isn't — fall through to raw
+    }
+  }
+  return body;
+}
+
+/**
  * Pay a vanilla (non-Xenarch) x402 gate via the V1 X-PAYMENT flow (XEN-359).
  * Caps/scope still apply — the agent control plane governs all spend, not just
  * Xenarch gates — so we run the same preflight + receipt path as the V2 flow.
@@ -101,14 +126,8 @@ No transaction sent.`);
     return;
   }
 
-  if (result.tx_hash) {
-    console.log(`  ${bold("Tx hash:")} ${result.tx_hash}`);
-  }
-  console.log(`  ${bold("Paid to:")} ${green(result.pay_to)}`);
-  console.log(`\n${green("Payment accepted — content unlocked.")}`);
-
-  // Report to the agent control plane so caps stay accurate. Vanilla pays
-  // have no Xenarch gate_id.
+  // Report to the agent control plane so caps stay accurate (both output
+  // modes). Vanilla pays have no Xenarch gate_id.
   await reportReceipt(config.api_base, {
     url,
     amount_usd: priceUsd,
@@ -120,6 +139,27 @@ No transaction sent.`);
     wallet_address: signerAddress,
     auth_token: authToken,
   });
+
+  if (jsonOutput) {
+    console.log(
+      JSON.stringify({
+        paid: true,
+        pay_to: result.pay_to,
+        tx_hash: result.tx_hash,
+        amount_usd: priceUsd,
+        content_type: result.contentType,
+        content: result.content,
+      }),
+    );
+    return;
+  }
+
+  if (result.tx_hash) {
+    console.log(`  ${bold("Tx hash:")} ${result.tx_hash}`);
+  }
+  console.log(`  ${bold("Paid to:")} ${green(result.pay_to)}`);
+  console.log(`\n${green("Payment accepted — content unlocked.")}\n`);
+  console.log(formatPaidContent(result.content, result.contentType));
 }
 
 export function registerPayCommand(program: Command): void {
@@ -328,6 +368,17 @@ No transaction sent.`);
           paymentResult.tx_hash,
         );
         const replayOk = replay.ok;
+        // XEN-466: the replay IS the content the user paid for — read it
+        // (guarded; an already-settled payment must not fail on a body hiccup).
+        const replayContentType = replay.headers.get("content-type");
+        let replayBody = "";
+        if (replayOk) {
+          try {
+            replayBody = await replay.text();
+          } catch {
+            replayBody = "";
+          }
+        }
 
         // Cache for future short-circuits and `xenarch history`.
         const paidAt = new Date().toISOString();
@@ -365,6 +416,8 @@ No transaction sent.`);
               amount_usd: paymentResult.amount_usd,
               replay_status: replay.status,
               replay_ok: replayOk,
+              content_type: replayContentType,
+              content: replayBody,
             }),
           );
           return;
@@ -378,6 +431,10 @@ No transaction sent.`);
           console.log(
             `  ${bold("Replay:")}      ${yellow(`HTTP ${replay.status} (publisher did not serve content)`)}`,
           );
+        }
+
+        if (replayOk && replayBody) {
+          console.log(`\n${formatPaidContent(replayBody, replayContentType)}`);
         }
 
         console.log(`
