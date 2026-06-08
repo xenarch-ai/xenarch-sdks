@@ -10,12 +10,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ethers } from "ethers";
 import {
   executePayment,
+  executePaymentV1Inline,
+  pickV1Accept,
   selectAccept,
   NoFacilitatorSettledError,
 } from "../../src/lib/payment.js";
 import { Router } from "../../src/lib/router.js";
 import { mockGateResponse, TEST_SELLER } from "../fixtures/mock-responses.js";
-import { USDC_BASE, type GateResponse } from "../../src/types.js";
+import {
+  USDC_BASE,
+  type GateResponse,
+  type PaymentRequirements,
+} from "../../src/types.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -237,5 +243,113 @@ describe("executePayment all-fail", () => {
     await expect(executePayment(gate, makeSigner())).rejects.toThrow(
       /no compatible payment scheme/,
     );
+  });
+});
+
+// --- XEN-359: vanilla (non-Xenarch) x402 V1 X-PAYMENT flow -----------------
+
+function usdcAccept(
+  over: Partial<PaymentRequirements> = {},
+): PaymentRequirements {
+  return {
+    scheme: "exact",
+    network: "base",
+    maxAmountRequired: "3000",
+    resource: "https://other.com/page",
+    payTo: TEST_SELLER,
+    maxTimeoutSeconds: 60,
+    asset: USDC_BASE,
+    ...over,
+  };
+}
+
+describe("pickV1Accept", () => {
+  it("selects a USDC-on-Base exact accept and computes the USD price", () => {
+    const sel = pickV1Accept([usdcAccept()]);
+    expect(sel.accept.payTo).toBe(TEST_SELLER);
+    expect(sel.amount).toBe(3000n);
+    expect(sel.priceUsd).toBe("0.003");
+  });
+
+  it("rejects a non-USDC asset", () => {
+    expect(() => pickV1Accept([usdcAccept({ asset: "0xdead" })])).toThrow(
+      /only pay USDC on Base/,
+    );
+  });
+
+  it("rejects a non-Base network", () => {
+    expect(() => pickV1Accept([usdcAccept({ network: "solana" })])).toThrow(
+      /only pay USDC on Base/,
+    );
+  });
+
+  it("throws when there are no payment requirements", () => {
+    expect(() => pickV1Accept([])).toThrow(/no payment requirements/);
+  });
+
+  it("rejects a non-positive amount (empty maxAmountRequired → 0)", () => {
+    expect(() => pickV1Accept([usdcAccept({ maxAmountRequired: "" })])).toThrow(
+      /non-positive amount/,
+    );
+  });
+});
+
+describe("executePaymentV1Inline", () => {
+  it("sends a base64 X-PAYMENT header and returns the tx from X-PAYMENT-RESPONSE", async () => {
+    const txResp = Buffer.from(
+      JSON.stringify({ transaction: "0x" + "ab".repeat(32) }),
+    ).toString("base64");
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response("content", {
+        status: 200,
+        headers: { "X-PAYMENT-RESPONSE": txResp },
+      }),
+    );
+
+    const res = await executePaymentV1Inline(
+      "https://other.com/page",
+      usdcAccept(),
+      3000n,
+      makeSigner(),
+    );
+    expect(res.tx_hash).toBe("0x" + "ab".repeat(32));
+    expect(res.pay_to).toBe(TEST_SELLER);
+
+    // The replay GET carries a base64 X-PAYMENT voucher signed to the seller.
+    const init = vi.mocked(globalThis.fetch).mock.calls[0][1] as RequestInit;
+    const header = (init.headers as Record<string, string>)["X-PAYMENT"];
+    const payload = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
+    expect(payload.scheme).toBe("exact");
+    expect(payload.payload.authorization.to).toBe(TEST_SELLER);
+    expect(payload.payload.authorization.value).toBe("3000");
+    expect(payload.payload.signature).toMatch(/^0x[0-9a-fA-F]+$/);
+  });
+
+  it("returns a null tx_hash when the server omits X-PAYMENT-RESPONSE", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response("content", { status: 200 }),
+    );
+    const res = await executePaymentV1Inline(
+      "https://other.com/page",
+      usdcAccept(),
+      3000n,
+      makeSigner(),
+    );
+    expect(res.tx_hash).toBeNull();
+    expect(res.pay_to).toBe(TEST_SELLER);
+  });
+
+  it("throws when the resource server does not return 200", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response("still gated", { status: 402 }),
+    );
+    await expect(
+      executePaymentV1Inline(
+        "https://other.com/page",
+        usdcAccept(),
+        3000n,
+        makeSigner(),
+      ),
+    ).rejects.toThrow(/HTTP 402/);
   });
 });

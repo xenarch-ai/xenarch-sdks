@@ -35,6 +35,7 @@ import type {
   MerchantProfileBody,
   PayLinkInitiateResponse,
   PayLinkClaimResponse,
+  PaymentRequirements,
 } from "../types.js";
 import { GATE_ID_HEADER, TX_HASH_HEADER, SESSION_COOKIE_NAME } from "../types.js";
 
@@ -74,9 +75,23 @@ async function errorMessage(res: Response): Promise<string> {
   }
 }
 
+/** A plain (non-Xenarch) x402 402 the CLI can still pay via the V1 X-PAYMENT flow. */
+export interface VanillaGate {
+  url: string;
+  x402Version: number;
+  accepts: PaymentRequirements[];
+}
+
 export interface FetchGateResult {
   gated: boolean;
   gate: GateResponse | null;
+  /**
+   * Set when the URL returns a standard x402 402 that is NOT a Xenarch gate
+   * but advertises a payable `accepts[]` array. The CLI settles these via the
+   * vanilla X-PAYMENT flow (XEN-359) so it can pay any x402 server, not just
+   * Xenarch's own. Null for non-402 responses and Xenarch gates.
+   */
+  vanilla: VanillaGate | null;
 }
 
 export async function fetchGate(url: string): Promise<FetchGateResult> {
@@ -88,15 +103,30 @@ export async function fetchGate(url: string): Promise<FetchGateResult> {
   });
 
   if (res.status !== 402) {
-    return { gated: false, gate: null };
+    return { gated: false, gate: null, vanilla: null };
   }
 
   const body = await res.json();
-  if (!body.xenarch) {
-    return { gated: false, gate: null };
+  if (body.xenarch) {
+    return { gated: true, gate: body as GateResponse, vanilla: null };
   }
 
-  return { gated: true, gate: body as GateResponse };
+  // Non-Xenarch x402 gate: payable via the vanilla X-PAYMENT flow as long as
+  // it advertises payment requirements.
+  if (Array.isArray(body.accepts) && body.accepts.length > 0) {
+    return {
+      gated: false,
+      gate: null,
+      vanilla: {
+        url,
+        x402Version:
+          typeof body.x402Version === "number" ? body.x402Version : 1,
+        accepts: body.accepts as PaymentRequirements[],
+      },
+    };
+  }
+
+  return { gated: false, gate: null, vanilla: null };
 }
 
 /**

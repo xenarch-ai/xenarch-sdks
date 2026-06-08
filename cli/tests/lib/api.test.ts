@@ -39,7 +39,7 @@ describe("fetchGate", () => {
     expect(result.gate).toBeNull();
   });
 
-  it("returns not gated for non-Xenarch 402", async () => {
+  it("returns not gated (no vanilla) for a non-Xenarch 402 with no accepts", async () => {
     const body = { error: "payment_required", xenarch: false };
     vi.mocked(globalThis.fetch).mockResolvedValue(
       new Response(JSON.stringify(body), { status: 402 }),
@@ -47,6 +47,33 @@ describe("fetchGate", () => {
 
     const result = await fetchGate("https://other.com/page");
     expect(result.gated).toBe(false);
+    expect(result.vanilla).toBeNull();
+  });
+
+  it("returns a vanilla gate for a non-Xenarch 402 with accepts[] (XEN-359)", async () => {
+    const body = {
+      x402Version: 1,
+      accepts: [
+        {
+          scheme: "exact",
+          network: "base",
+          maxAmountRequired: "3000",
+          resource: "https://other.com/page",
+          payTo: "0x" + "11".repeat(20),
+          maxTimeoutSeconds: 60,
+          asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        },
+      ],
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(body), { status: 402 }),
+    );
+
+    const result = await fetchGate("https://other.com/page");
+    expect(result.gated).toBe(false);
+    expect(result.gate).toBeNull();
+    expect(result.vanilla?.accepts).toHaveLength(1);
+    expect(result.vanilla?.accepts[0].payTo).toBe("0x" + "11".repeat(20));
   });
 });
 
