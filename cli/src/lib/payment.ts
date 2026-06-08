@@ -294,3 +294,114 @@ export async function executePayment(
 
   throw new NoFacilitatorSettledError(tried);
 }
+
+// ---------------------------------------------------------------------------
+// V1 vanilla x402 flow (XEN-359) — pay any non-Xenarch x402 gate.
+//
+// Mirrors the Python SDK `_payer._pay_v1_inline`: sign an EIP-3009 voucher,
+// base64-encode it into the `X-PAYMENT` header, and replay the original URL.
+// The resource server (or its own facilitator) settles on-chain and returns
+// 200 with the content. No Xenarch facilitator, no canonical-header replay.
+// ---------------------------------------------------------------------------
+
+const USDC_BASE_LOWER = USDC_BASE.toLowerCase();
+
+export interface V1Selection {
+  accept: PaymentRequirements;
+  amount: bigint;
+  priceUsd: string;
+}
+
+/**
+ * Pick + validate the x402 `accepts` entry for a vanilla (non-Xenarch) gate.
+ * The CLI can only sign USDC-on-Base `exact`-scheme vouchers, so reject
+ * anything else with a clear message instead of signing something the wallet
+ * cannot honor.
+ */
+export function pickV1Accept(accepts: PaymentRequirements[]): V1Selection {
+  const accept = selectAccept(accepts, "base");
+  if (accept === null) {
+    throw new Error("x402 gate advertised no payment requirements.");
+  }
+  if (
+    accept.scheme !== "exact" ||
+    accept.network !== "base" ||
+    accept.asset.toLowerCase() !== USDC_BASE_LOWER
+  ) {
+    throw new Error(
+      `Unsupported x402 payment requirement (scheme=${accept.scheme}, ` +
+        `network=${accept.network}, asset=${accept.asset}). The CLI can only ` +
+        `pay USDC on Base with the "exact" scheme.`,
+    );
+  }
+  const amount = BigInt(accept.maxAmountRequired);
+  if (amount <= 0n) {
+    // BigInt("") is 0n (no throw) — reject the degenerate "sign nothing" case.
+    throw new Error(
+      `x402 gate requested a non-positive amount (${accept.maxAmountRequired}).`,
+    );
+  }
+  return { accept, amount, priceUsd: ethers.formatUnits(amount, 6) };
+}
+
+interface XPaymentResponse {
+  transaction?: string;
+  txHash?: string;
+  [k: string]: unknown;
+}
+
+/**
+ * Settle a vanilla (non-Xenarch) x402 gate via the V1 `X-PAYMENT` flow.
+ * Returns the tx hash if the server echoes one in `X-PAYMENT-RESPONSE`
+ * (some do not — success is determined by the HTTP 200, not the tx).
+ */
+export async function executePaymentV1Inline(
+  url: string,
+  accept: PaymentRequirements,
+  amount: bigint,
+  signer: ethers.Signer,
+): Promise<{ tx_hash: string | null; pay_to: string }> {
+  const signed = await signEip3009(signer, accept, amount);
+  const header = Buffer.from(JSON.stringify(signed), "utf8").toString("base64");
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), SETTLE_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "X-PAYMENT": header, "User-Agent": "xenarch-cli" },
+      redirect: "follow",
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (res.status !== 200) {
+    let detail = "";
+    try {
+      detail = (await res.text()).slice(0, 300);
+    } catch {
+      /* body unreadable — status alone is enough */
+    }
+    throw new Error(
+      `Vanilla x402 settlement failed: HTTP ${res.status}` +
+        (detail ? ` — ${detail}` : ""),
+    );
+  }
+
+  let txHash: string | null = null;
+  const respHeader = res.headers.get("x-payment-response");
+  if (respHeader) {
+    try {
+      const decoded = JSON.parse(
+        Buffer.from(respHeader, "base64").toString("utf8"),
+      ) as XPaymentResponse;
+      txHash = decoded.transaction ?? decoded.txHash ?? null;
+    } catch {
+      txHash = null;
+    }
+  }
+
+  return { tx_hash: txHash, pay_to: accept.payTo };
+}

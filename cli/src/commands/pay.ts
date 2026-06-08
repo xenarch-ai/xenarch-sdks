@@ -1,8 +1,13 @@
 import { Command } from "commander";
+import { ethers } from "ethers";
 import { readConfig } from "../lib/config.js";
 import { loadSigner } from "../lib/wallet.js";
-import { fetchGate, fetchWithReplay } from "../lib/api.js";
-import { executePayment } from "../lib/payment.js";
+import { fetchGate, fetchWithReplay, type VanillaGate } from "../lib/api.js";
+import {
+  executePayment,
+  executePaymentV1Inline,
+  pickV1Accept,
+} from "../lib/payment.js";
 import {
   hostedCheckoutLinkId,
   payLinkWrapped,
@@ -20,6 +25,101 @@ function isValidUrl(s: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Pay a vanilla (non-Xenarch) x402 gate via the V1 X-PAYMENT flow (XEN-359).
+ * Caps/scope still apply — the agent control plane governs all spend, not just
+ * Xenarch gates — so we run the same preflight + receipt path as the V2 flow.
+ */
+async function payVanillaX402(
+  vanilla: VanillaGate,
+  signer: ethers.Signer,
+  signerAddress: string,
+  config: { api_base: string },
+  opts: { url: string; maxPrice: number; dryRun: boolean; jsonOutput: boolean },
+): Promise<void> {
+  const { url, maxPrice, dryRun, jsonOutput } = opts;
+
+  let selection;
+  try {
+    selection = pickV1Accept(vanilla.accepts);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+    return;
+  }
+  const { accept, amount, priceUsd } = selection;
+
+  if (parseFloat(priceUsd) > maxPrice) {
+    console.error(
+      `Price $${priceUsd} exceeds max price $${maxPrice.toFixed(2)}. Use --max-price to increase the limit.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  if (dryRun) {
+    if (jsonOutput) {
+      console.log(JSON.stringify({ dry_run: true, vanilla: { url, accept } }));
+      return;
+    }
+    console.log(`${yellow("[DRY RUN]")} Would pay $${priceUsd} USDC (vanilla x402) for ${url}
+
+  ${bold("Seller:")}  ${accept.payTo}
+  ${bold("Network:")} ${accept.network}
+  ${bold("Wallet:")}  ${signerAddress}
+
+No transaction sent.`);
+    return;
+  }
+
+  // Caps/scope still apply to vanilla pays (no-op without XENARCH_API_TOKEN).
+  const preflight = await checkPreflight(config.api_base, url, priceUsd);
+  let authToken: string | null = null;
+  if (!preflight.ok) {
+    if ("detail" in preflight) {
+      console.error(`Refused by Xenarch control plane: ${preflight.detail}`);
+    } else {
+      console.error(formatDenyMessage(preflight));
+    }
+    process.exitCode = 1;
+    return;
+  }
+  if (!("bypassed" in preflight)) {
+    authToken = preflight.auth_token;
+  }
+
+  console.log(`Paying $${priceUsd} USDC (vanilla x402) for ${url}\n`);
+
+  let result;
+  try {
+    result = await executePaymentV1Inline(url, accept, amount, signer);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (result.tx_hash) {
+    console.log(`  ${bold("Tx hash:")} ${result.tx_hash}`);
+  }
+  console.log(`  ${bold("Paid to:")} ${green(result.pay_to)}`);
+  console.log(`\n${green("Payment accepted — content unlocked.")}`);
+
+  // Report to the agent control plane so caps stay accurate. Vanilla pays
+  // have no Xenarch gate_id.
+  await reportReceipt(config.api_base, {
+    url,
+    amount_usd: priceUsd,
+    source: "cli",
+    status: "paid",
+    paid_at: new Date().toISOString(),
+    tx_hash: result.tx_hash ?? null,
+    facilitator: "x402-inline",
+    wallet_address: signerAddress,
+    auth_token: authToken,
+  });
 }
 
 export function registerPayCommand(program: Command): void {
@@ -128,6 +228,18 @@ Replay with:
         // Fetch gate
         const result = await fetchGate(url);
         if (!result.gated || !result.gate) {
+          // Not a Xenarch gate. If it's a plain x402 402 with payment
+          // requirements, pay it via the vanilla X-PAYMENT flow (XEN-359).
+          // Otherwise it's genuinely not a payable gate.
+          if (result.vanilla) {
+            await payVanillaX402(result.vanilla, signer, signerAddress, config, {
+              url,
+              maxPrice,
+              dryRun,
+              jsonOutput,
+            });
+            return;
+          }
           console.log("This URL is not gated by Xenarch.");
           return;
         }
