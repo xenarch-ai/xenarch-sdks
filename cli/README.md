@@ -48,6 +48,17 @@ xenarch history --json
 
 Set `XENARCH_PRIVATE_KEY` to use an existing wallet instead of the local one, and `XENARCH_MAX_PAYMENT_USD` to cap per-call spend (default unbounded).
 
+## Paying anything that speaks x402
+
+`xenarch pay <url>` works against **any** x402 endpoint, not just Xenarch's. If a URL returns a standard x402 `402` with payment requirements, the CLI signs an EIP-3009 USDC voucher and settles it — a universal x402 client. It pays whatever the seller gates that way: an **API call, content, metered usage, or a one-time invoice/checkout**.
+
+Two boundaries:
+
+- **x402 only.** It pays the x402 protocol, not other payment schemes — a Stripe-link / MPP invoice, for example, won't be paid.
+- **One-time only.** A single `pay` is one payment. Recurring **subscriptions** are a Xenarch-platform feature (permit / reminder pay-links), not something the CLI sets up against third parties.
+
+**0% fee and gasless apply only to Xenarch.** On a non-Xenarch endpoint, that server and its own facilitator set the fees and pay the gas — Xenarch guarantees nothing there (not gaslessness, fees, or uptime). The "no ETH / no gas, 0% Xenarch fee" experience holds only when the gate is part of the Xenarch platform, where invoices, checkouts and subscriptions are first-class pay-link types.
+
 ## Agent control plane (optional)
 
 If you've created an `xa_live_*` token from the Xenarch dashboard at https://dash.xenarch.dev/agent/settings, set it as the `XENARCH_API_TOKEN` env var. Every `xenarch pay` will:
