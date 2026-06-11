@@ -2,11 +2,11 @@
 
 **These are test-only keys.** `xenarch_signed.privkey.pem` is an Ed25519 private
 key generated solely to produce `xenarch_signed.json` for the receipt-verify
-tests. It has no connection to any facilitator that ever holds real funds.
+tests. It has no connection to any settlement provider that ever holds real funds.
 
 Do NOT:
 - reuse this keypair for any production signing,
-- copy it into a deployed facilitator's secret store,
+- copy it into a deployed settlement provider's secret store,
 - or accept a receipt signed by this key outside of this test suite.
 
 To regenerate, ensure `cryptography` is installed and run a script that:

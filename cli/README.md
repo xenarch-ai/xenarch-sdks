@@ -57,14 +57,14 @@ Two boundaries:
 - **x402 only.** It pays the x402 protocol, not other payment schemes — a Stripe-link / MPP invoice, for example, won't be paid.
 - **One-time only.** A single `pay` is one payment. Recurring **subscriptions** are a Xenarch-platform feature (permit / reminder pay-links), not something the CLI sets up against third parties.
 
-**0% fee and gasless apply only to Xenarch.** On a non-Xenarch endpoint, that server and its own facilitator set the fees and pay the gas — Xenarch guarantees nothing there (not gaslessness, fees, or uptime). The "no ETH / no gas, 0% Xenarch fee" experience holds only when the gate is part of the Xenarch platform, where invoices, checkouts and subscriptions are first-class pay-link types.
+**0% fee and gasless apply only to Xenarch.** On a non-Xenarch endpoint, that server and its own settlement provider set the fees and pay the gas — Xenarch guarantees nothing there (not gaslessness, fees, or uptime). The "no ETH / no gas, 0% Xenarch fee" experience holds only when the gate is part of the Xenarch platform, where invoices, checkouts and subscriptions are first-class pay-link types.
 
 ## Agent control plane (optional)
 
 If you've created an `xa_live_*` token from the Xenarch dashboard at https://dash.xenarch.dev/agent/settings, set it as the `XENARCH_API_TOKEN` env var. Every `xenarch pay` will:
 
 1. **Preflight** with the platform — server-enforced caps (per-tx, daily, monthly), scope rules (allow/deny domain patterns), and a fleet-wide kill switch. Refused payments stop before any USDC is signed.
-2. **Settle** on chain via a third-party x402 facilitator (PayAI, xpay, Heurist, etc.) — same as before.
+2. **Settle** on chain via a third-party x402 settlement provider (PayAI, xpay, Heurist, etc.) — same as before.
 3. **Report the receipt** back to the dashboard so you see spend, hit counters, and refusal audits in one place.
 
 ```bash
