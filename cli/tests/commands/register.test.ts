@@ -35,7 +35,6 @@ describe("register command logic", () => {
     const result = await registerPublisher(
       "https://xenarch.dev",
       "test@example.com",
-      "password123",
     );
     expect(result.id).toBe(mockResp.id);
     expect(result.api_key).toBe(mockResp.api_key);
@@ -59,7 +58,7 @@ describe("register command logic", () => {
     );
 
     await expect(
-      registerPublisher("https://xenarch.dev", "dup@example.com", "password123"),
+      registerPublisher("https://xenarch.dev", "dup@example.com"),
     ).rejects.toThrow("Registration failed");
   });
 
@@ -67,13 +66,13 @@ describe("register command logic", () => {
     const mockResp = mockPublisherRegisterResponse();
     vi.mocked(globalThis.fetch).mockResolvedValue(mock201Response(mockResp));
 
-    await registerPublisher("https://xenarch.dev", "test@example.com", "password123");
+    await registerPublisher("https://xenarch.dev", "test@example.com");
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "https://xenarch.dev/v1/publishers",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ email: "test@example.com", password: "password123" }),
+        body: JSON.stringify({ email: "test@example.com" }),
       }),
     );
   });
