@@ -8,7 +8,6 @@ import type {
   SiteCreateResponse,
   SiteListItem,
   SiteStatsResponse,
-  PayoutUpdateResponse,
   SiweNonceResponse,
   MeAgentProfile,
   AgentSummary,
@@ -231,12 +230,12 @@ export async function fetchPayJson(
 export async function registerPublisher(
   apiBase: string,
   email: string,
-  password: string,
 ): Promise<PublisherRegisterResponse> {
+  // XEN-522: passwordless — register with email only, returns an API key.
   const res = await fetch(`${apiBase}/v1/publishers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email }),
   });
 
   if (!res.ok) {
@@ -298,47 +297,10 @@ export async function getSiteStats(
   return (await res.json()) as SiteStatsResponse;
 }
 
-export async function loginPublisher(
-  apiBase: string,
-  email: string,
-  password: string,
-): Promise<{ api_key: string }> {
-  const res = await fetch(`${apiBase}/v1/publishers/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-
-  if (!res.ok) {
-    throw new Error(await errorMessage(res));
-  }
-
-  return (await res.json()) as { api_key: string };
-}
-
-export async function updatePayout(
-  apiBase: string,
-  authToken: string,
-  wallet: string,
-  password: string,
-  network: string = "base",
-): Promise<PayoutUpdateResponse> {
-  const res = await fetch(`${apiBase}/v1/publishers/me/payout`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
-      "X-Confirm-Password": password,
-    },
-    body: JSON.stringify({ wallet, network }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to update payout: ${await errorMessage(res)}`);
-  }
-
-  return (await res.json()) as PayoutUpdateResponse;
-}
+// XEN-522: loginPublisher removed — email/password login is gone. Get an API
+// key from `xen register` or the dashboard. updatePayout removed — PUT
+// /publishers/me/payout was retired in XEN-435 (payout wallet lives on the
+// identity now).
 
 // --- Agent control plane (SIWE session: /v1/me/agent/*) ---
 

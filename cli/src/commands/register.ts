@@ -13,29 +13,21 @@ function prompt(rl: readline.Interface, question: string): Promise<string> {
 export function registerRegisterCommand(program: Command): void {
   program
     .command("register")
-    .description("Register as a Xenarch publisher")
+    .description("Register as a Xenarch publisher (passwordless — returns an API key)")
     .option("--email <email>", "Publisher email address")
-    .option("--password <password>", "Account password (min 8 characters)")
     .action(async (opts, cmd) => {
       const globals = cmd.optsWithGlobals();
       const jsonOutput: boolean = globals.json ?? false;
       const apiBase: string = globals.apiBase ?? (await readConfig()).api_base;
 
       let email: string = opts.email;
-      let password: string = opts.password;
 
-      if (!email || !password) {
+      if (!email) {
         const rl = readline.createInterface({
           input: process.stdin,
           output: process.stdout,
         });
-
-        if (!email) {
-          email = await prompt(rl, "Email: ");
-        }
-        if (!password) {
-          password = await prompt(rl, "Password: ");
-        }
+        email = await prompt(rl, "Email: ");
         rl.close();
       }
 
@@ -45,14 +37,9 @@ export function registerRegisterCommand(program: Command): void {
         return;
       }
 
-      if (!password || password.length < 8) {
-        console.error("Password must be at least 8 characters.");
-        process.exitCode = 1;
-        return;
-      }
-
       try {
-        const result = await registerPublisher(apiBase, email, password);
+        // XEN-522: passwordless — register issues the API key directly.
+        const result = await registerPublisher(apiBase, email);
 
         // Store the API key in config
         const config = await readConfig();

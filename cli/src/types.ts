@@ -165,11 +165,6 @@ export interface SiteStatsResponse {
   top_agents: Array<{ wallet: string; count: number; total_usd: string }>;
 }
 
-export interface PayoutUpdateResponse {
-  confirmed: boolean;
-  effective_at: string;
-}
-
 // --- Payment History Cache ---
 
 /**
