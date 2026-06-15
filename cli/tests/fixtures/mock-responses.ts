@@ -9,7 +9,6 @@ import type {
   SiteCreateResponse,
   SiteListItem,
   SiteStatsResponse,
-  PayoutUpdateResponse,
 } from "../../src/types.js";
 import { USDC_BASE } from "../../src/types.js";
 
@@ -181,16 +180,6 @@ export function mockSiteStatsResponse(
     top_agents: [
       { wallet: "0x" + "aa".repeat(20), count: 25, total_usd: "0.075" },
     ],
-    ...overrides,
-  };
-}
-
-export function mockPayoutUpdateResponse(
-  overrides: Partial<PayoutUpdateResponse> = {},
-): PayoutUpdateResponse {
-  return {
-    confirmed: true,
-    effective_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
     ...overrides,
   };
 }
