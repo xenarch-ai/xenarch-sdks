@@ -12,7 +12,8 @@
 //                 "denied by scope rule *.scammer.com").
 //
 // Fail-closed: control plane unreachable + token configured → refuse.
-// No token configured → bypass (Phase-1 backwards compat).
+// XEN-480: no token configured → ALSO refuse (an unlinked agent has no
+// caps/scope, so the official client must not pay uncapped).
 
 const ENV_TOKEN = "XENARCH_API_TOKEN";
 const PREFLIGHT_TIMEOUT_MS = 5000;
@@ -46,22 +47,17 @@ export interface PreflightDeny {
 
 export interface PreflightUnreachable {
   ok: false;
-  reason: "control_plane_unreachable";
+  // "not_connected" (XEN-480: no XENARCH_API_TOKEN → fail-closed, the agent
+  // isn't linked so it has no caps/scope) or "control_plane_unreachable"
+  // (token set but the platform didn't answer — also fail-closed).
+  reason: "control_plane_unreachable" | "not_connected";
   detail: string;
-}
-
-export interface PreflightBypassed {
-  ok: true;
-  auth_token: null;
-  expires_in: 0;
-  bypassed: true;
 }
 
 export type PreflightResult =
   | PreflightAllow
   | PreflightDeny
-  | PreflightUnreachable
-  | PreflightBypassed;
+  | PreflightUnreachable;
 
 /**
  * Format a deny reason into a human-readable refusal message + a hint
@@ -165,8 +161,8 @@ function subtractMoney(a: string, b: string): string | null {
  * Sync preflight call. Returns:
  *
  *  - {ok: true, auth_token, expires_in}  → proceed with payment.
- *  - {ok: true, auth_token: null, bypassed: true}  → no token configured,
- *    proceed without enforcement (Phase-1 backwards compat).
+ *  - {ok: false, reason: "not_connected", detail}  → refuse (XEN-480:
+ *    no XENARCH_API_TOKEN, so the agent is unlinked and uncapped).
  *  - {ok: false, reason}  → refuse the payment with that reason.
  *  - {ok: false, reason: "control_plane_unreachable", detail}  → refuse
  *    (fail-closed — the operator configured a token, expects enforcement).
@@ -180,7 +176,14 @@ export async function checkPreflight(
 ): Promise<PreflightResult> {
   const token = process.env[ENV_TOKEN];
   if (!token) {
-    return { ok: true, auth_token: null, expires_in: 0, bypassed: true };
+    // XEN-480: fail-closed. An unlinked agent has no caps/scope, so the
+    // official client refuses to pay rather than settling uncapped.
+    return {
+      ok: false,
+      reason: "not_connected",
+      detail:
+        "Not connected to the Xenarch control plane — set XENARCH_API_TOKEN (run `xenarch agent login`) so payments are capped.",
+    };
   }
 
   const controller = new AbortController();

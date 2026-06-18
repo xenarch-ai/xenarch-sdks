@@ -119,7 +119,8 @@ export async function payLinkWrapped(
         : formatDenyMessage(preflight);
     throw new Error(reason);
   }
-  const authToken = "bypassed" in preflight ? null : preflight.auth_token;
+  // XEN-480: preflight is allowed here (the !ok branch threw above).
+  const authToken = preflight.auth_token;
 
   // Adapt the initiate envelope into the GateResponse shape executePayment
   // consumes. asset is the USDC contract (used for facilitator selection);
