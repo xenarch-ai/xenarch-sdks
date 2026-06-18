@@ -144,7 +144,15 @@ async function signEip3009(
   const from = await signer.getAddress();
   const validAfter = 0n;
   const validBefore = BigInt(Math.floor(Date.now() / 1000) + AUTH_VALIDITY_S);
-  const nonce = ethers.hexlify(ethers.randomBytes(32));
+  // XEN-537 / M3: for a pay-link the server mints a link-bound EIP-3009 nonce
+  // and returns it in the envelope's `extra.nonce`; signing THAT (not a random
+  // one) is what binds the settled tx to its link at /claim. Vanilla x402 gate
+  // payments carry no such nonce, so fall back to a random one there.
+  const serverNonce = accept.extra?.nonce;
+  const nonce =
+    typeof serverNonce === "string" && serverNonce.startsWith("0x")
+      ? serverNonce
+      : ethers.hexlify(ethers.randomBytes(32));
 
   const message = {
     from,

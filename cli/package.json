@@ -1,8 +1,8 @@
 {
   "name": "xenarch",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "type": "module",
-  "description": "CLI for Xenarch — non-custodial x402 MCP server for AI agents. Claude, Cursor, LangChain and CrewAI pay HTTP 402–gated APIs with USDC on Base L2.",
+  "description": "CLI for Xenarch \u2014 non-custodial x402 MCP server for AI agents. Claude, Cursor, LangChain and CrewAI pay HTTP 402\u2013gated APIs with USDC on Base L2.",
   "keywords": [
     "mcp",
     "mcp-server",
