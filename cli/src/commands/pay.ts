@@ -111,9 +111,9 @@ No transaction sent.`);
     process.exitCode = 1;
     return;
   }
-  if (!("bypassed" in preflight)) {
-    authToken = preflight.auth_token;
-  }
+  // preflight is allowed here (the !ok branch returned above); XEN-480
+  // removed the no-token bypass, so this is always a real preflight token.
+  authToken = preflight.auth_token;
 
   console.log(`Paying $${priceUsd} USDC (vanilla x402) for ${url}\n`);
 
@@ -345,9 +345,8 @@ No transaction sent.`);
           process.exitCode = 1;
           return;
         }
-        if (!("bypassed" in preflight)) {
-          authToken = preflight.auth_token;
-        }
+        // XEN-480: no more no-token bypass — preflight is allowed here.
+        authToken = preflight.auth_token;
 
         // Execute payment via third-party facilitator
         console.log(`Paying $${gate.price_usd} ${gate.asset} for ${url}\n`);

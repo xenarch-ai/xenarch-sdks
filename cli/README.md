@@ -59,9 +59,9 @@ Two boundaries:
 
 **0% fee and gasless apply only to Xenarch.** On a non-Xenarch endpoint, that server and its own settlement provider set the fees and pay the gas — Xenarch guarantees nothing there (not gaslessness, fees, or uptime). The "no ETH / no gas, 0% Xenarch fee" experience holds only when the gate is part of the Xenarch platform, where invoices, checkouts and subscriptions are first-class pay-link types.
 
-## Agent control plane (optional)
+## Agent control plane (required to pay)
 
-If you've created an `xa_live_*` token from the Xenarch dashboard at https://dash.xenarch.dev/agent/settings, set it as the `XENARCH_API_TOKEN` env var. Every `xenarch pay` will:
+**`XENARCH_API_TOKEN` is required.** Autonomous agent payments are meant to be capped, so the CLI **refuses to pay without it** — an unlinked agent has no caps or scope. Create an `xa_live_*` token from the Xenarch dashboard at https://dash.xenarch.dev/agent/settings (or run `xenarch agent login`) and set it as the `XENARCH_API_TOKEN` env var. Every `xenarch pay` then:
 
 1. **Preflight** with the platform — server-enforced caps (per-tx, daily, monthly), scope rules (allow/deny domain patterns), and a fleet-wide kill switch. Refused payments stop before any USDC is signed.
 2. **Settle** on chain via a third-party x402 settlement provider (PayAI, xpay, Heurist, etc.) — same as before.
@@ -72,7 +72,7 @@ export XENARCH_API_TOKEN=xa_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xenarch pay https://example.com/premium-article
 ```
 
-Without the env var, the CLI works exactly as before — receipt reporting + control-plane enforcement are opt-in. Network failures during receipt POST queue offline at `~/.xenarch/receipts-queue.jsonl` and retry on next invocation.
+Without the env var, the CLI refuses to pay (fail-closed) — set the token so payments are capped. Network failures during receipt POST queue offline at `~/.xenarch/receipts-queue.jsonl` and retry on next invocation.
 
 ### What refusals look like
 
