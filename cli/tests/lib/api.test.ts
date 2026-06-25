@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fetchGate, verifyPayment, getGateStatus, fetchPayJson } from "../../src/lib/api.js";
+import {
+  fetchGate,
+  verifyPayment,
+  getGateStatus,
+  fetchPayJson,
+  claimLinkPayment,
+  ClaimAwaitingConfirmationsError,
+} from "../../src/lib/api.js";
 import {
   mock402Response,
   mock200Response,
@@ -140,5 +147,53 @@ describe("fetchPayJson", () => {
 
     const result = await fetchPayJson("https://example.com/article");
     expect(result).toBeNull();
+  });
+});
+
+describe("claimLinkPayment — 202 awaiting-confirmations (XEN-574)", () => {
+  const API = "https://xenarch.dev";
+
+  it("throws ClaimAwaitingConfirmationsError on HTTP 202 (keep polling)", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ detail: "awaiting confirmations" }), {
+        status: 202,
+      }),
+    );
+
+    await expect(
+      claimLinkPayment(API, "lnk_1", "0x" + "ab".repeat(32)),
+    ).rejects.toBeInstanceOf(ClaimAwaitingConfirmationsError);
+  });
+
+  it("returns the booked claim response on HTTP 200", async () => {
+    const booked = {
+      attempt_id: "att_1",
+      tx_hash: "0x" + "ab".repeat(32),
+      status: "confirmed",
+      value_usdc: "0.05",
+      expected_usdc: "0.05",
+      block_number: 100,
+      paid_and_single_use: false,
+      created: true,
+      manage_url: null,
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValue(mock200Response(booked));
+
+    const res = await claimLinkPayment(API, "lnk_1", booked.tx_hash);
+    expect(res.tx_hash).toBe(booked.tx_hash);
+    expect(res.status).toBe("confirmed");
+    expect(res.created).toBe(true);
+  });
+
+  it("throws a non-awaiting error on a terminal 4xx (fail fast)", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response("link is revoked", { status: 410 }),
+    );
+
+    const err = await claimLinkPayment(API, "lnk_1", "0x" + "ab".repeat(32)).catch(
+      (e) => e,
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(ClaimAwaitingConfirmationsError);
   });
 });
