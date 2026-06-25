@@ -5,7 +5,9 @@ Isomorphic TypeScript/JavaScript SDK for Xenarch. Pay for and get paid through H
 One package, two sides of the market — for both human devs and AI agents:
 
 - **`sdk.x402`** — *pay* any HTTP 402-gated resource on the open web (pure protocol; the seller never has to have heard of Xenarch).
-- **`sdk.merchant`** — *get paid*: create and manage pay-links, read payments and subscribers, manage your merchant profile.
+- **`sdk.merchant`** — *get paid*: pay-links, **metered usage**, payments, subscribers, orders, services, assets, earnings, and your merchant profile.
+- **`sdk.agent`** — the agent control plane: spend caps, scope rules, API keys, receipts.
+- **`sdk.info`** — unauthenticated public reads: receipts, reputation, USDC/USD rate, wallet whois.
 - **`sdk.webhooks`** — verify incoming webhook signatures on your backend.
 
 Runs on Node, Bun, Deno, and edge runtimes (Cloudflare Workers, Vercel Edge) — it's just `fetch` + Web Crypto + [viem](https://viem.sh).
@@ -65,6 +67,50 @@ await sdk.merchant.links.revoke(link.link_id, { confirm: true });
 `create` always validates first, so "validate ok ⇒ create ok". It throws `PayLinkValidationError` (with `.missing` / `.errors`) when the params are incomplete. An `Idempotency-Key` is generated per create (dedupes a network-level retry of that one request).
 
 Signing and revoking require `{ confirm: true }` by default — a guard against a stray agent call committing funds or killing a live link. Trusted scripts can opt out once with `createXenarch({ ..., requireConfirm: false })`.
+
+### Metered subscriptions (usage-based billing)
+
+For a per-unit metered subscription where **you count usage yourself** (the
+`merchant_reported` source), report increments as they happen. Usage reporting
+authenticates with the **link's `webhook_secret`** — not your merchant session —
+so a thin reporting service in your backend only needs the secret:
+
+```ts
+// One client per reporting service; no privateKey/session needed for reporting.
+const sdk = createXenarch();
+
+// Each subscriber signs ONE spending-cap permit at signup (hosted checkout),
+// which gives you their `subscription_id`. Report usage increments against it:
+await sdk.merchant.usage.report(
+  linkId,
+  {
+    subscriptionId,            // the subscriber's id
+    units: 1,                  // a positive INCREMENT (e.g. calls), not a running total
+    idempotencyKey: callId,    // stable per increment → retries dedupe to a no-op
+  },
+  { secret: webhookSecret },   // the link's whsec_... from links.create
+);
+```
+
+Xenarch accrues the units and books a charge against the signed permit when the
+billing threshold is crossed. Settle the booked charges on-chain (you broadcast
+the `transferFrom`; Xenarch never moves money):
+
+```ts
+const { collectable } = await sdk.merchant.subscribers.meteredCollectable();
+// → each row has { transfer_from: { owner, spender, value }, ... } to settle.
+// After broadcasting the USDC.transferFrom tx, record it:
+await sdk.merchant.subscribers.meteredCollect(subscriptionId, { txHash });
+```
+
+## Agent control plane: `sdk.agent`
+
+```ts
+await sdk.agent.setCaps({ /* per-tx / per-day spend caps */ });
+await sdk.agent.setScope("deny", [{ /* allow/deny rules */ }]);
+const key = await sdk.agent.keys.create("ci-bot");  // plaintext secret returned once
+await sdk.agent.setPaused(true);                     // emergency stop
+```
 
 ## Pay: `sdk.x402`
 

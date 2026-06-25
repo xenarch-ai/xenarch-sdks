@@ -1,8 +1,8 @@
 {
   "name": "@xenarch/sdk",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
-  "description": "Isomorphic TypeScript SDK for Xenarch — pay any HTTP 402 resource (sdk.x402) and get paid: pay-links, payments, subscribers, profile, webhooks (sdk.merchant). For human devs and AI agents. Gasless USDC on Base. 0% Xenarch fee.",
+  "description": "Isomorphic TypeScript SDK for Xenarch — pay any HTTP 402 resource (sdk.x402) and get paid: pay-links, metered usage, payments, subscribers, orders, services, profile, webhooks (sdk.merchant), plus the agent control plane (sdk.agent). For human devs and AI agents. Gasless USDC on Base. 0% Xenarch fee.",
   "keywords": [
     "xenarch",
     "x402",
