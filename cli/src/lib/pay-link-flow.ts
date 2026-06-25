@@ -6,7 +6,11 @@
 
 import { ethers } from "ethers";
 import { executePayment } from "./payment.js";
-import { initiateLinkPayment, claimLinkPayment } from "./api.js";
+import {
+  initiateLinkPayment,
+  claimLinkPayment,
+  ClaimAwaitingConfirmationsError,
+} from "./api.js";
 import { loadSigner } from "./wallet.js";
 import { connectWalletConnect } from "./wc-connect.js";
 import { checkPreflight, formatDenyMessage } from "./agent-preflight.js";
@@ -38,7 +42,11 @@ export async function loadPayerSigner(
   return loadSigner(rpcUrl);
 }
 
-const CLAIM_RETRIES = 6;
+// 10 × 3s = 30s. Covers the tx indexing on Base (~2s blocks) AND a 202
+// "awaiting confirmations" wait once REQUIRED_CONFIRMATIONS > 1 (XEN-574) —
+// comfortably more than any realistic depth for the max-$1 payments this rail
+// carries.
+const CLAIM_RETRIES = 10;
 const CLAIM_RETRY_DELAY_MS = 3000;
 
 /** Only the "tx not indexed yet" case is worth retrying; revoked/expired/
@@ -159,9 +167,15 @@ export async function payLinkWrapped(
       };
     } catch (err) {
       lastErr = err;
-      // Terminal error (revoked/expired/invalid tx) — fail fast; the tx already
-      // settled on-chain, so surface it immediately rather than retrying.
-      if (!isTransientClaimError(err)) {
+      // XEN-574: a 202 "awaiting confirmations" (tx mined, not yet at the
+      // server's confirmation depth, nothing booked) is retryable like a
+      // not-yet-indexed tx — keep polling rather than failing the settled
+      // payment. Everything else terminal (revoked/expired/invalid tx) fails
+      // fast; the tx already settled on-chain, so surface it immediately.
+      const retryable =
+        err instanceof ClaimAwaitingConfirmationsError ||
+        isTransientClaimError(err);
+      if (!retryable) {
         throw new Error(
           `Payment settled (tx ${settle.tx_hash}) but the link rejected it: ${(err as Error).message}`,
         );

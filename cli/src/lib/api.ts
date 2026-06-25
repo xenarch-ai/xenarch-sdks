@@ -708,6 +708,20 @@ export async function initiateLinkPayment(
   throw new Error(await errorMessage(res));
 }
 
+/**
+ * Thrown by {@link claimLinkPayment} on HTTP **202** "awaiting confirmations":
+ * the tx is mined but not yet at the server's required confirmation depth, so
+ * nothing is booked and the caller MUST keep polling (XEN-574). Distinct from a
+ * real terminal error — treating the 202 as success returns an unbooked payment
+ * (the XEN-570 dropped-booking bug). Latent until REQUIRED_CONFIRMATIONS > 1.
+ */
+export class ClaimAwaitingConfirmationsError extends Error {
+  constructor() {
+    super("claim awaiting confirmations");
+    this.name = "ClaimAwaitingConfirmationsError";
+  }
+}
+
 /** POST /v1/links/{id}/claim — record the on-chain tx against the link. */
 export async function claimLinkPayment(
   apiBase: string,
@@ -722,6 +736,10 @@ export async function claimLinkPayment(
       body: JSON.stringify({ tx_hash: txHash }),
     },
   );
+  // XEN-574: 202 means "mined, awaiting confirmation depth, nothing booked".
+  // Signal the caller to keep polling instead of returning the 202 body as a
+  // booked payment.
+  if (res.status === 202) throw new ClaimAwaitingConfirmationsError();
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()) as PayLinkClaimResponse;
 }
