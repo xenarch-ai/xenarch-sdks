@@ -72,6 +72,36 @@ export async function confirmTier2(
   return answer.toLowerCase() === "yes";
 }
 
+/**
+ * Mutation gate for a privileged/irreversible action. JSON callers get a
+ * structured `needs_confirmation` object (unless `--confirm`) and a non-zero
+ * exit; interactive/plain callers fall through to the {@link confirmTier2}
+ * yes/no prompt. Returns `true` only when the caller may proceed. Mirrors the
+ * `links create` needs_confirmation path + the `links revoke` Tier-2 gate.
+ */
+export async function confirmMutation(
+  jsonOutput: boolean,
+  promptText: string,
+  action: string,
+  opts: { confirm?: boolean },
+): Promise<boolean> {
+  if (opts.confirm) return true;
+  if (jsonOutput) {
+    console.log(
+      JSON.stringify({
+        needs_confirmation: true,
+        action,
+        message: `${promptText} Re-run with --confirm to proceed.`,
+      }),
+    );
+    process.exitCode = 1;
+    return false;
+  }
+  const ok = await confirmTier2(promptText, opts);
+  if (!ok) process.exitCode = 1;
+  return ok;
+}
+
 /** Prompt for one line of input. Returns the default when the user hits enter. */
 export async function promptLine(question: string, def?: string): Promise<string> {
   const rl = readline.createInterface({
@@ -100,4 +130,9 @@ export function fail(err: unknown): void {
 
 export function usd(v: string | null | undefined): string {
   return v === null || v === undefined ? dim("—") : `$${v}`;
+}
+
+/** Format an integer micro-USDC (1e-6 USDC) amount as a trimmed dollar string. */
+export function microUsd(micro: number): string {
+  return `$${(micro / 1e6).toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}`;
 }

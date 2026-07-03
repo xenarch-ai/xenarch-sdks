@@ -488,12 +488,120 @@ export interface SubscriberListItem {
   created_at: string;
   amount_usd: string | null;
   cadence: string | null;
+  // XEN-611 dunning surface. `collectable` is the sweep-cached affordability
+  // verdict (true/false/null=unchecked); `collection_fail_count` is the
+  // consecutive due-cycle failure count (0..5). Together they render
+  // "dunning (n/5)" without a second fetch. Additive — older servers omit them.
+  collectable?: boolean | null;
+  collectable_reason?: string | null;
+  collection_fail_count?: number;
 }
 
 export interface SubscriberListResponse {
   subscribers: SubscriberListItem[];
   has_more: boolean;
   next_cursor: string | null;
+}
+
+/**
+ * GET /v1/subscribers/{id} owner detail — permissive; we surface key fields +
+ * carry the raw body (same shape strategy as {@link PayLinkDetail}).
+ */
+export interface SubscriberDetail {
+  subscription_id: string;
+  link_id: string;
+  is_metered: boolean;
+  status: string;
+  mode: "reminder" | "permit" | "stream";
+  issuer_name: string | null;
+  plan_name: string | null;
+  amount_usdc: string | null;
+  currency: string;
+  cadence: string | null;
+  cadence_label: string | null;
+  next_renewal_at: string | null;
+  last_renewal_at: string | null;
+  cycles_paid: number;
+  payer_email: string | null;
+  payer_wallet: string | null;
+  created_at: string;
+  [key: string]: unknown;
+}
+
+/** One row of the immutable per-subscriber metered charge ledger (XEN-483). */
+export interface SubscriberChargeItem {
+  charge_seq: number;
+  status: "booked" | "settled" | "void";
+  accrued_units_billed: string;
+  billable_units: string;
+  value_usdc: string;
+  value_micro_usdc: number;
+  booked_at: string;
+  tx_hash: string | null;
+  settled_at: string | null;
+  block_number: number | null;
+  basescan_url: string | null;
+}
+
+export interface SubscriberChargesResponse {
+  subscription_id: string;
+  charges: SubscriberChargeItem[];
+  has_more: boolean;
+  next_cursor: number | null;
+  total_charged_micro: number;
+  total_collected_micro: number;
+  outstanding_micro: number;
+}
+
+/** POST /v1/subscribers/{id}/merchant-cancel + /suspend. */
+export interface SubscriberCancelResponse {
+  subscription_id: string;
+  status: string;
+}
+
+/** POST /v1/subscribers/{id}/manage-link — short-lived hosted-manage-page URL. */
+export interface ManageLinkResponse {
+  manage_url: string;
+  manage_token: string;
+  expires_at: string;
+}
+
+/** GET /v1/subscribers/rollup — subscriber KPIs hero. */
+export interface SubscribersRollup {
+  active: number;
+  mrr_usdc: string;
+  churn_30d: number | null;
+}
+
+/** POST /v1/subscribers/{id}/period-cap result. */
+export interface PeriodCapResult {
+  subscription_id: string;
+  status: string;
+  period_cap_micro: number | null;
+  period_cap_usdc: string;
+  exceeds_permit_runway: boolean;
+  remaining_permit_micro: number;
+}
+
+/**
+ * GET /v1/subscribers/permit|metered/collectable — the "collectable bag".
+ * Read-only: Xenarch never submits the on-chain transferFrom. Rows are
+ * permissive (permit vs metered rows differ); we surface the key fields.
+ */
+export interface CollectableRow {
+  subscription_id: string;
+  pay_link_id: string;
+  payer_email: string | null;
+  payer_wallet: string | null;
+  to: string;
+  transfer_from: { owner: string | null; spender: string | null; value: number };
+  [key: string]: unknown;
+}
+
+export interface CollectableResponse {
+  collectable: CollectableRow[];
+  count: number;
+  total_micro: number;
 }
 
 /** Writable merchant-profile fields (PUT body). */

@@ -30,6 +30,13 @@ import type {
   PayLinkRevokeResponse,
   MerchantPaymentListResponse,
   SubscriberListResponse,
+  SubscriberDetail,
+  SubscriberChargesResponse,
+  SubscriberCancelResponse,
+  ManageLinkResponse,
+  SubscribersRollup,
+  PeriodCapResult,
+  CollectableResponse,
   MerchantProfileResponse,
   MerchantProfileBody,
   PayLinkInitiateResponse,
@@ -540,6 +547,29 @@ export async function meSessionRequest<T>(
   return (await res.json()) as T;
 }
 
+/**
+ * Like {@link meSessionRequest} but returns the raw response body as text —
+ * for endpoints that emit non-JSON (e.g. GET /v1/subscribers/export.csv).
+ */
+export async function meSessionRequestText(
+  apiBase: string,
+  sessionToken: string,
+  method: string,
+  path: string,
+): Promise<string> {
+  const res = await fetch(`${apiBase}${path}`, {
+    method,
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${sessionToken}` },
+  });
+  if (res.status === 401) {
+    throw new SessionExpiredError(await errorMessage(res));
+  }
+  if (!res.ok) {
+    throw new Error(await errorMessage(res));
+  }
+  return await res.text();
+}
+
 /** GET /v1/links/schema — public, no auth. The create-body descriptor. */
 export async function getLinkSchema(
   apiBase: string,
@@ -646,6 +676,156 @@ export function listSubscribers(
     token,
     "GET",
     `/v1/subscribers${qs}`,
+  );
+}
+
+// --- Subscribers: lifecycle + collections (XEN-518) -----------------------
+
+export function getSubscriber(
+  apiBase: string,
+  token: string,
+  subscriptionId: string,
+): Promise<SubscriberDetail> {
+  return meSessionRequest<SubscriberDetail>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/subscribers/${encodeURIComponent(subscriptionId)}`,
+  );
+}
+
+export function listSubscriberCharges(
+  apiBase: string,
+  token: string,
+  subscriptionId: string,
+  query = "",
+): Promise<SubscriberChargesResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<SubscriberChargesResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/subscribers/${encodeURIComponent(subscriptionId)}/charges${qs}`,
+  );
+}
+
+export function getSubscribersRollup(
+  apiBase: string,
+  token: string,
+): Promise<SubscribersRollup> {
+  return meSessionRequest<SubscribersRollup>(
+    apiBase,
+    token,
+    "GET",
+    "/v1/subscribers/rollup",
+  );
+}
+
+/** GET /v1/subscribers/export.csv — raw CSV text (owner-scoped, same filters). */
+export function exportSubscribersCsv(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<string> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequestText(
+    apiBase,
+    token,
+    "GET",
+    `/v1/subscribers/export.csv${qs}`,
+  );
+}
+
+/** POST /v1/subscribers/{id}/merchant-cancel — reminder-mode only (409 else). */
+export function merchantCancelSubscriber(
+  apiBase: string,
+  token: string,
+  subscriptionId: string,
+): Promise<SubscriberCancelResponse> {
+  return meSessionRequest<SubscriberCancelResponse>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/subscribers/${encodeURIComponent(subscriptionId)}/merchant-cancel`,
+  );
+}
+
+/** POST /v1/subscribers/{id}/suspend — any mode; stops dunning, no on-chain. */
+export function suspendSubscriber(
+  apiBase: string,
+  token: string,
+  subscriptionId: string,
+): Promise<SubscriberCancelResponse> {
+  return meSessionRequest<SubscriberCancelResponse>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/subscribers/${encodeURIComponent(subscriptionId)}/suspend`,
+  );
+}
+
+/** POST /v1/subscribers/{id}/manage-link — mint a short-lived manage URL. */
+export function mintManageLink(
+  apiBase: string,
+  token: string,
+  subscriptionId: string,
+  ttlSeconds?: number,
+): Promise<ManageLinkResponse> {
+  return meSessionRequest<ManageLinkResponse>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/subscribers/${encodeURIComponent(subscriptionId)}/manage-link`,
+    ttlSeconds !== undefined ? { ttl_seconds: ttlSeconds } : {},
+  );
+}
+
+/**
+ * POST /v1/subscribers/{id}/period-cap — set/raise the buyer's per-period
+ * budget. Manage-token gated (not SIWE): the caller mints a manage token via
+ * {@link mintManageLink} first, then passes it here. Metered-per-period only.
+ */
+export function setPeriodCap(
+  apiBase: string,
+  token: string,
+  subscriptionId: string,
+  manageToken: string,
+  newCapUsdc: string,
+): Promise<PeriodCapResult> {
+  return meSessionRequest<PeriodCapResult>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/subscribers/${encodeURIComponent(subscriptionId)}/period-cap?token=${encodeURIComponent(manageToken)}`,
+    { new_cap_usdc: newCapUsdc },
+  );
+}
+
+export function listPermitCollectable(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<CollectableResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<CollectableResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/subscribers/permit/collectable${qs}`,
+  );
+}
+
+export function listMeteredCollectable(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<CollectableResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<CollectableResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/subscribers/metered/collectable${qs}`,
   );
 }
 

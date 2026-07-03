@@ -12,6 +12,7 @@ import { registerAgentCommands } from "./commands/agent.js";
 import { registerLinksCommands } from "./commands/links.js";
 import { registerPaymentsCommands } from "./commands/payments.js";
 import { registerSubscribersCommands } from "./commands/subscribers.js";
+import { registerCollectCommands } from "./commands/collect.js";
 import { registerProfileCommands } from "./commands/profile.js";
 import { registerPayLinkCommand } from "./commands/pay-link.js";
 
@@ -56,6 +57,7 @@ export function createProgram(): Command {
   registerLinksCommands(program);
   registerPaymentsCommands(program);
   registerSubscribersCommands(program);
+  registerCollectCommands(program);
   registerProfileCommands(program);
   registerPayLinkCommand(program);
 
