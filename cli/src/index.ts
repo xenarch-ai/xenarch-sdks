@@ -5,13 +5,22 @@ import { registerCheckCommand } from "./commands/check.js";
 import { registerPayCommand } from "./commands/pay.js";
 import { registerHistoryCommand } from "./commands/history.js";
 import { registerRegisterCommand } from "./commands/register.js";
-import { registerSiteAddCommand } from "./commands/site-add.js";
+import { registerSiteCommands } from "./commands/site.js";
 import { registerSitesCommand } from "./commands/sites.js";
 import { registerStatsCommand } from "./commands/stats.js";
+import { registerGatingCommands } from "./commands/gating.js";
+import { registerBotsCommands } from "./commands/bots.js";
+import { registerWalletsCommands } from "./commands/wallets.js";
+import { registerKeysCommands } from "./commands/keys.js";
+import { registerInvitesCommands } from "./commands/invites.js";
+import { registerAccountCommands } from "./commands/account.js";
 import { registerAgentCommands } from "./commands/agent.js";
 import { registerLinksCommands } from "./commands/links.js";
 import { registerPaymentsCommands } from "./commands/payments.js";
 import { registerSubscribersCommands } from "./commands/subscribers.js";
+import { registerCollectCommands } from "./commands/collect.js";
+import { registerGroupsCommands } from "./commands/groups.js";
+import { registerOrdersCommands } from "./commands/orders.js";
 import { registerProfileCommands } from "./commands/profile.js";
 import { registerPayLinkCommand } from "./commands/pay-link.js";
 
@@ -56,6 +65,9 @@ export function createProgram(): Command {
   registerLinksCommands(program);
   registerPaymentsCommands(program);
   registerSubscribersCommands(program);
+  registerCollectCommands(program);
+  registerGroupsCommands(program);
+  registerOrdersCommands(program);
   registerProfileCommands(program);
   registerPayLinkCommand(program);
 
@@ -63,9 +75,17 @@ export function createProgram(): Command {
   // XEN-522: login + payout commands removed (passwordless auth; payout
   // wallet lives on the identity). register is now passwordless.
   registerRegisterCommand(program);
-  registerSiteAddCommand(program);
+  registerSiteCommands(program);
   registerSitesCommand(program);
   registerStatsCommand(program);
+  registerGatingCommands(program);
+  registerBotsCommands(program);
+
+  // Account & identity (SIWE) — wallets / keys / invites / email / earnings
+  registerWalletsCommands(program);
+  registerKeysCommands(program);
+  registerInvitesCommands(program);
+  registerAccountCommands(program);
 
   return program;
 }

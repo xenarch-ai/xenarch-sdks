@@ -20,7 +20,16 @@ import {
   rotateAgentKey,
   revokeAgentKey,
   listAgentReceipts,
+  getMeAgentReceipt,
+  updateMeAgent,
+  getAgentWebhook,
+  putAgentWebhook,
+  rotateAgentWebhookSecret,
+  testAgentWebhook,
+  listAgentWebhookDeliveries,
+  retryAgentWebhookDelivery,
 } from "../lib/api.js";
+import { confirmMutation } from "../lib/cmd-common.js";
 import { bold, green, yellow, red, dim, cyan, formatTable } from "../lib/output.js";
 import type { ScopeMode, ScopeRuleInput, AgentCapsPut } from "../types.js";
 
@@ -707,19 +716,36 @@ export function registerAgentCommands(program: Command): void {
 
   // --- receipts -----------------------------------------------------------
   agent
-    .command("receipts")
-    .description("List the agent's payment receipts")
+    .command("receipts [id]")
+    .description("List the agent's payment receipts, or show one by id")
     .option("--period <period>", "24h | 7d | 30d | all", "all")
     .option("--status <status>", "paid | pending | failed")
     .option("--source <source>", "cli | mcp | sdk | custom")
     .option("--domain <domain>", "Filter by domain")
     .option("--page <n>", "Page number", "1")
     .option("--per-page <n>", "Rows per page (max 100)", "25")
-    .action(async (opts, cmd: Command) => {
+    .action(async (id: string | undefined, opts, cmd: Command) => {
       try {
         const apiBase = await resolveApiBase(cmd);
         const { jsonOutput } = ctx(cmd, apiBase);
         const token = await loadSession();
+
+        if (id) {
+          const r = await getMeAgentReceipt(apiBase, token, id);
+          if (jsonOutput) {
+            console.log(JSON.stringify(r));
+            return;
+          }
+          console.log(`${bold("Receipt")} ${r.id}
+  ${bold("Amount:")}  $${r.amount_usd}
+  ${bold("Domain:")}  ${r.domain}
+  ${bold("URL:")}     ${r.url}
+  ${bold("Status:")}  ${r.status === "paid" ? green(r.status) : red(r.status)}
+  ${bold("Source:")}  ${r.source}
+  ${bold("Tx:")}      ${r.tx_hash ?? dim("—")}
+  ${bold("Paid:")}    ${r.paid_at}`);
+          return;
+        }
 
         const params = new URLSearchParams();
         params.set("period", opts.period);
@@ -753,6 +779,244 @@ export function registerAgentCommands(program: Command): void {
         console.log(
           dim(`  page ${list.page} · ${list.receipts.length} of ${list.total} total`),
         );
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  // --- profile (show / set) -----------------------------------------------
+  const profile = agent
+    .command("profile")
+    .description("Agent display profile (name + label)");
+
+  profile
+    .command("show")
+    .description("Show the agent profile")
+    .action(async (_opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const a = await getMeAgent(apiBase, token);
+        if (jsonOutput) {
+          console.log(JSON.stringify(a));
+          return;
+        }
+        console.log(`${bold("Agent")} ${a.id}
+  ${bold("Name:")}   ${a.display_name ?? dim("—")}
+  ${bold("Label:")}  ${a.label ?? dim("—")}
+  ${bold("Paused:")} ${a.paused ? yellow("yes") : "no"}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  profile
+    .command("set")
+    .description("Set the agent display name and/or label (Tier-2)")
+    .option("--name <name>", "Display name")
+    .option("--label <label>", "Slug label (lowercase, a-z0-9-_) or '' to clear")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        if (opts.name === undefined && opts.label === undefined) {
+          throw new Error("Pass --name and/or --label.");
+        }
+        const body: { display_name?: string | null; label?: string | null } = {};
+        if (opts.name !== undefined) body.display_name = opts.name;
+        if (opts.label !== undefined) body.label = opts.label;
+        const ok = await confirmMutation(
+          jsonOutput,
+          "Update the agent profile?",
+          "set_agent_profile",
+          opts,
+        );
+        if (!ok) return;
+        const a = await updateMeAgent(apiBase, token, body);
+        if (jsonOutput) {
+          console.log(JSON.stringify(a));
+          return;
+        }
+        console.log(`${green("Profile updated.")} ${a.display_name ?? dim("—")} ${a.label ? dim(`(${a.label})`) : ""}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  // --- webhook sub-group --------------------------------------------------
+  const webhook = agent
+    .command("webhook")
+    .description("Manage the agent's webhook (get/set/rotate/test/deliveries/retry)");
+
+  webhook
+    .command("get")
+    .description("Show the agent webhook config")
+    .action(async (_opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const w = await getAgentWebhook(apiBase, token);
+        if (jsonOutput) {
+          console.log(JSON.stringify(w));
+          return;
+        }
+        console.log(`${bold("URL:")}     ${w.url ?? dim("— (not set)")}
+  ${bold("Enabled:")} ${w.enabled ? green("yes") : dim("no")}
+  ${bold("Events:")}  ${w.event_types ? w.event_types.join(", ") : dim("all")}
+  ${dim(`available: ${w.available_event_types.join(", ")}`)}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("set")
+    .description("Set the agent webhook URL + subscribed events (Tier-2)")
+    .requiredOption("--url <url>", "Destination URL (https)")
+    .option("--events <csv>", "Comma-separated event_types (omit = all)")
+    .option("--disabled", "Create the webhook disabled")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const body = {
+          url: opts.url,
+          event_types: opts.events
+            ? String(opts.events).split(",").map((s) => s.trim()).filter(Boolean)
+            : null,
+          enabled: !opts.disabled,
+        };
+        const ok = await confirmMutation(
+          jsonOutput,
+          `Point the agent webhook at ${opts.url}?`,
+          "set_agent_webhook",
+          opts,
+        );
+        if (!ok) return;
+        const w = await putAgentWebhook(apiBase, token, body);
+        if (jsonOutput) {
+          console.log(JSON.stringify(w));
+          return;
+        }
+        console.log(`${green("Webhook set.")} ${w.url} ${w.enabled ? green("enabled") : dim("disabled")}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("rotate")
+    .description("Rotate the agent webhook signing secret — shown once (Tier-2)")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const ok = await confirmMutation(
+          jsonOutput,
+          "Rotate the agent webhook secret? The old secret stops validating signatures.",
+          "rotate_agent_webhook_secret",
+          opts,
+        );
+        if (!ok) return;
+        const r = await rotateAgentWebhookSecret(apiBase, token);
+        if (jsonOutput) {
+          console.log(JSON.stringify(r));
+          return;
+        }
+        console.log(`${green("Secret rotated.")}
+  ${bold("Webhook secret:")} ${r.secret} ${dim("(shown once)")}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("test")
+    .description("Send a synthetic test delivery to smoke the endpoint")
+    .action(async (_opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const d = await testAgentWebhook(apiBase, token);
+        if (jsonOutput) {
+          console.log(JSON.stringify(d));
+          return;
+        }
+        console.log(`${green("Test delivery queued.")} ${d.id} → ${d.dest_url} ${dim(`(${d.status})`)}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("deliveries")
+    .description("List recent agent webhook delivery attempts")
+    .option("--limit <n>", "Max rows", "50")
+    .action(async (opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const qs = new URLSearchParams();
+        qs.set("limit", opts.limit);
+        const res = await listAgentWebhookDeliveries(apiBase, token, qs.toString());
+        if (jsonOutput) {
+          console.log(JSON.stringify(res));
+          return;
+        }
+        if (!res.deliveries.length) {
+          console.log(dim("No deliveries."));
+          return;
+        }
+        console.log(
+          formatTable(
+            ["Delivery", "Event", "When", "HTTP", "Status", "Retries"],
+            res.deliveries.map((d) => [
+              d.id,
+              d.event_type,
+              d.attempted_at,
+              d.http_status === null ? dim("—") : String(d.http_status),
+              d.status === "delivered" ? green(d.status) : red(d.status),
+              String(d.retry_count),
+            ]),
+          ),
+        );
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("retry <delivery-id>")
+    .description("Re-queue one agent webhook delivery (Tier-2)")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (deliveryId: string, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const ok = await confirmMutation(
+          jsonOutput,
+          `Re-queue agent webhook delivery ${deliveryId}?`,
+          "retry_agent_webhook_delivery",
+          opts,
+        );
+        if (!ok) return;
+        const d = await retryAgentWebhookDelivery(apiBase, token, deliveryId);
+        if (jsonOutput) {
+          console.log(JSON.stringify(d));
+          return;
+        }
+        console.log(`${green("Delivery re-queued.")} ${d.id} ${dim(`(${d.status})`)}`);
       } catch (err) {
         fail(err);
       }
