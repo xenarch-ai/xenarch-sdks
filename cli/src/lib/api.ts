@@ -21,6 +21,23 @@ import type {
   AgentApiKeySummary,
   AgentApiKeyIssued,
   AgentReceiptList,
+  AgentReceiptItem,
+  MeAgentUpdateBody,
+  AgentWebhookConfig,
+  AgentWebhookConfigBody,
+  AgentWebhookSecretResult,
+  AgentWebhookDeliveryItem,
+  AgentWebhookDeliveriesResponse,
+  MeWalletsListResponse,
+  OwnerTransferResult,
+  MerchantApiKeySummary,
+  MerchantApiKeyIssued,
+  InviteCreateBody,
+  InviteCreateResult,
+  InvitesListResponse,
+  OnboardingEmailResult,
+  OnboardingEmailVerifyResult,
+  EarningsSummary,
   PayLinkSchemaResponse,
   PayLinkValidateResponse,
   PayLinkCreateBody,
@@ -538,6 +555,95 @@ export function listAgentReceipts(
 ): Promise<AgentReceiptList> {
   const qs = query ? `?${query}` : "";
   return meAgentRequest<AgentReceiptList>(apiBase, token, "GET", `/receipts${qs}`);
+}
+
+// --- Agent profile, single receipt, webhooks (XEN-518) --------------------
+
+export function updateMeAgent(
+  apiBase: string,
+  token: string,
+  body: MeAgentUpdateBody,
+): Promise<MeAgentProfile> {
+  return meAgentRequest<MeAgentProfile>(apiBase, token, "PUT", "", body);
+}
+
+export function getMeAgentReceipt(
+  apiBase: string,
+  token: string,
+  receiptId: string,
+): Promise<AgentReceiptItem> {
+  return meAgentRequest<AgentReceiptItem>(
+    apiBase,
+    token,
+    "GET",
+    `/receipts/${encodeURIComponent(receiptId)}`,
+  );
+}
+
+export function getAgentWebhook(
+  apiBase: string,
+  token: string,
+): Promise<AgentWebhookConfig> {
+  return meAgentRequest<AgentWebhookConfig>(apiBase, token, "GET", "/webhooks");
+}
+
+export function putAgentWebhook(
+  apiBase: string,
+  token: string,
+  body: AgentWebhookConfigBody,
+): Promise<AgentWebhookConfig> {
+  return meAgentRequest<AgentWebhookConfig>(apiBase, token, "PUT", "/webhooks", body);
+}
+
+export function rotateAgentWebhookSecret(
+  apiBase: string,
+  token: string,
+): Promise<AgentWebhookSecretResult> {
+  return meAgentRequest<AgentWebhookSecretResult>(
+    apiBase,
+    token,
+    "POST",
+    "/webhooks/rotate-secret",
+  );
+}
+
+export function testAgentWebhook(
+  apiBase: string,
+  token: string,
+): Promise<AgentWebhookDeliveryItem> {
+  return meAgentRequest<AgentWebhookDeliveryItem>(
+    apiBase,
+    token,
+    "POST",
+    "/webhooks/test",
+  );
+}
+
+export function listAgentWebhookDeliveries(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<AgentWebhookDeliveriesResponse> {
+  const qs = query ? `?${query}` : "";
+  return meAgentRequest<AgentWebhookDeliveriesResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/webhooks/deliveries${qs}`,
+  );
+}
+
+export function retryAgentWebhookDelivery(
+  apiBase: string,
+  token: string,
+  deliveryId: string,
+): Promise<AgentWebhookDeliveryItem> {
+  return meAgentRequest<AgentWebhookDeliveryItem>(
+    apiBase,
+    token,
+    "POST",
+    `/webhooks/deliveries/${encodeURIComponent(deliveryId)}/retry`,
+  );
 }
 
 // --- Merchant ops (SIWE session on bare /v1/* paths) ----------------------
@@ -1265,6 +1371,188 @@ export function retryLinkWebhookDelivery(
     token,
     "POST",
     `/v1/links/${encodeURIComponent(linkId)}/webhook-deliveries/${encodeURIComponent(deliveryId)}/retry`,
+  );
+}
+
+// --- Account & identity: wallets, keys, invites, email, earnings (XEN-518) --
+
+export function listWallets(
+  apiBase: string,
+  token: string,
+): Promise<MeWalletsListResponse> {
+  return meSessionRequest<MeWalletsListResponse>(apiBase, token, "GET", "/v1/me/wallets");
+}
+
+export function unlinkWallet(
+  apiBase: string,
+  token: string,
+  address: string,
+): Promise<void> {
+  return meSessionRequest<void>(
+    apiBase,
+    token,
+    "DELETE",
+    `/v1/me/wallets/${encodeURIComponent(address)}`,
+  );
+}
+
+export function setWalletLabel(
+  apiBase: string,
+  token: string,
+  address: string,
+  label: string | null,
+): Promise<void> {
+  return meSessionRequest<void>(
+    apiBase,
+    token,
+    "PUT",
+    `/v1/me/wallets/${encodeURIComponent(address)}/label`,
+    { label },
+  );
+}
+
+export function transferOwner(
+  apiBase: string,
+  token: string,
+  newOwner: string,
+): Promise<OwnerTransferResult> {
+  return meSessionRequest<OwnerTransferResult>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/me/wallets/owner",
+    { new_owner: newOwner },
+  );
+}
+
+export function createMerchantKey(
+  apiBase: string,
+  token: string,
+  label: string | null,
+): Promise<MerchantApiKeyIssued> {
+  return meSessionRequest<MerchantApiKeyIssued>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/me/merchant/keys",
+    { label },
+  );
+}
+
+export function listMerchantKeys(
+  apiBase: string,
+  token: string,
+): Promise<MerchantApiKeySummary[]> {
+  return meSessionRequest<MerchantApiKeySummary[]>(
+    apiBase,
+    token,
+    "GET",
+    "/v1/me/merchant/keys",
+  );
+}
+
+export function rotateMerchantKey(
+  apiBase: string,
+  token: string,
+  keyId: string,
+): Promise<MerchantApiKeyIssued> {
+  return meSessionRequest<MerchantApiKeyIssued>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/me/merchant/keys/${encodeURIComponent(keyId)}/rotate`,
+  );
+}
+
+export function revokeMerchantKey(
+  apiBase: string,
+  token: string,
+  keyId: string,
+): Promise<void> {
+  return meSessionRequest<void>(
+    apiBase,
+    token,
+    "DELETE",
+    `/v1/me/merchant/keys/${encodeURIComponent(keyId)}`,
+  );
+}
+
+export function createInvite(
+  apiBase: string,
+  token: string,
+  body: InviteCreateBody,
+): Promise<InviteCreateResult> {
+  return meSessionRequest<InviteCreateResult>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/me/wallets/invite",
+    body,
+  );
+}
+
+export function listInvites(
+  apiBase: string,
+  token: string,
+): Promise<InvitesListResponse> {
+  return meSessionRequest<InvitesListResponse>(
+    apiBase,
+    token,
+    "GET",
+    "/v1/me/wallets/invites",
+  );
+}
+
+export function revokeInvite(
+  apiBase: string,
+  token: string,
+  inviteId: string,
+): Promise<void> {
+  return meSessionRequest<void>(
+    apiBase,
+    token,
+    "DELETE",
+    `/v1/me/wallets/invite/${encodeURIComponent(inviteId)}`,
+  );
+}
+
+export function setOnboardingEmail(
+  apiBase: string,
+  token: string,
+  email: string,
+): Promise<OnboardingEmailResult> {
+  return meSessionRequest<OnboardingEmailResult>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/onboarding/email",
+    { email },
+  );
+}
+
+export function verifyOnboardingEmail(
+  apiBase: string,
+  token: string,
+  code: string,
+): Promise<OnboardingEmailVerifyResult> {
+  return meSessionRequest<OnboardingEmailVerifyResult>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/onboarding/email/verify",
+    { code },
+  );
+}
+
+export function getEarningsSummary(
+  apiBase: string,
+  token: string,
+): Promise<EarningsSummary> {
+  return meSessionRequest<EarningsSummary>(
+    apiBase,
+    token,
+    "GET",
+    "/v1/earnings/summary",
   );
 }
 

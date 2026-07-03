@@ -10,6 +10,10 @@ import { registerSitesCommand } from "./commands/sites.js";
 import { registerStatsCommand } from "./commands/stats.js";
 import { registerGatingCommands } from "./commands/gating.js";
 import { registerBotsCommands } from "./commands/bots.js";
+import { registerWalletsCommands } from "./commands/wallets.js";
+import { registerKeysCommands } from "./commands/keys.js";
+import { registerInvitesCommands } from "./commands/invites.js";
+import { registerAccountCommands } from "./commands/account.js";
 import { registerAgentCommands } from "./commands/agent.js";
 import { registerLinksCommands } from "./commands/links.js";
 import { registerPaymentsCommands } from "./commands/payments.js";
@@ -76,6 +80,12 @@ export function createProgram(): Command {
   registerStatsCommand(program);
   registerGatingCommands(program);
   registerBotsCommands(program);
+
+  // Account & identity (SIWE) — wallets / keys / invites / email / earnings
+  registerWalletsCommands(program);
+  registerKeysCommands(program);
+  registerInvitesCommands(program);
+  registerAccountCommands(program);
 
   return program;
 }

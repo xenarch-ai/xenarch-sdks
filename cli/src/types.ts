@@ -420,6 +420,136 @@ export interface WebhookDeliveriesResponse {
   deliveries: WebhookDeliveryItem[];
 }
 
+// --- Account & identity, agent profile/webhooks, earnings (XEN-518, SIWE) ---
+
+/** PUT /v1/me/agent body — agent display profile. */
+export interface MeAgentUpdateBody {
+  display_name?: string | null;
+  label?: string | null;
+}
+
+/** GET/PUT /v1/me/agent/webhooks. Note: differs from the pay-link shape. */
+export interface AgentWebhookConfig {
+  configured: boolean;
+  url: string | null;
+  event_types: string[] | null;
+  enabled: boolean;
+  available_event_types: string[];
+}
+
+export interface AgentWebhookConfigBody {
+  url: string;
+  event_types?: string[] | null;
+  enabled: boolean;
+}
+
+/** POST /v1/me/agent/webhooks/rotate-secret — note `secret`, not webhook_secret. */
+export interface AgentWebhookSecretResult {
+  secret: string;
+}
+
+export interface AgentWebhookDeliveryItem {
+  id: string;
+  event_type: string;
+  attempted_at: string;
+  dest_url: string;
+  http_status: number | null;
+  latency_ms: number;
+  retry_count: number;
+  status: string;
+  error_message: string | null;
+}
+
+export interface AgentWebhookDeliveriesResponse {
+  deliveries: AgentWebhookDeliveryItem[];
+}
+
+/** GET /v1/me/wallets — one linked wallet. */
+export interface LinkedWalletItem {
+  address: string;
+  verified_at: string;
+  is_primary: boolean;
+  eligible_at: string;
+  eligible: boolean;
+  is_default: boolean;
+  is_owner: boolean;
+  label: string | null;
+}
+
+export interface MeWalletsListResponse {
+  wallets: LinkedWalletItem[];
+}
+
+export interface OwnerTransferResult {
+  owner_wallet: string;
+}
+
+/** GET/POST/rotate /v1/me/merchant/keys. */
+export interface MerchantApiKeySummary {
+  id: string;
+  label: string | null;
+  hash_preview: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface MerchantApiKeyIssued extends MerchantApiKeySummary {
+  /** Plaintext `xm_live_*` token — returned once. */
+  plaintext: string;
+}
+
+/** POST /v1/me/wallets/invite. */
+export interface InviteCreateBody {
+  label?: string | null;
+  role?: "viewer" | "operator" | "full_co_owner";
+}
+
+export interface InviteCreateResult {
+  token: string;
+  join_url: string;
+  expires_at: string;
+  label: string | null;
+  role: string;
+}
+
+export interface InviteItem {
+  id: string;
+  label: string | null;
+  role: string;
+  created_by_wallet: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface InvitesListResponse {
+  invites: InviteItem[];
+}
+
+/** POST /v1/onboarding/email(+/verify). */
+export interface OnboardingEmailResult {
+  email: string;
+  sent: boolean;
+}
+
+export interface OnboardingEmailVerifyResult {
+  identity_id: string;
+  email: string;
+  email_verified_at: string;
+}
+
+/** GET /v1/earnings/summary. */
+export interface EarningsBucket {
+  earned_usd: string;
+  payment_count: number;
+}
+
+export interface EarningsSummary {
+  today: EarningsBucket;
+  month: EarningsBucket;
+  all_time: EarningsBucket;
+}
+
 // --- Payment History Cache ---
 
 /**
