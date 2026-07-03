@@ -292,6 +292,134 @@ export interface BotActivityResponse {
   window_days: number;
 }
 
+// --- Pay-link detail surface, groups, orders, webhooks (XEN-518, SIWE) ------
+
+export interface PayLinkEventItem {
+  event_type: string;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface PayLinkEventsResponse {
+  events: PayLinkEventItem[];
+  next_cursor: string | null;
+}
+
+/** GET /v1/links/rollup — merchant pay-link KPIs. */
+export interface PayLinkRollup {
+  paid_24h: number;
+  paid_total: number;
+  mtd_revenue_usdc: string;
+  views: number;
+  conversion: number | null;
+}
+
+/** GET /v1/links/summary?period=… */
+export interface PayLinkSummary {
+  period: string;
+  revenue_usd: string;
+  paid_count: number;
+  link_count: number;
+}
+
+/** PATCH /v1/links/{id}/metadata body (whole-state; null clears). */
+export interface PayLinkMetadataBody {
+  metadata: Record<string, unknown> | null;
+}
+
+/** PATCH /v1/links/{id}/group result. */
+export interface LinkGroupAssignResult {
+  link_id: string;
+  group_id: string | null;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  accent_kind: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+  member_link_ids: string[];
+  member_count: number;
+}
+
+export interface GroupCreateBody {
+  name: string;
+  accent_kind?: string;
+}
+
+export interface GroupUpdateBody {
+  name?: string;
+  accent_kind?: string;
+  position?: number;
+}
+
+export interface GroupListResponse {
+  groups: Group[];
+}
+
+export interface Order {
+  order_id: string;
+  link_id: string;
+  product_name: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  buyer_phone: string | null;
+  shipping_address: string | null;
+  destination: string | null;
+  amount_usd: string;
+  status: string;
+  tracking: string | null;
+  tx_hash: string;
+  paid_at: string;
+}
+
+export interface OrderListResponse {
+  orders: Order[];
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
+export interface ShipOrderBody {
+  tracking: string;
+  carrier?: string;
+}
+
+/** GET/PUT /v1/links/{id}/webhook. */
+export interface WebhookConfig {
+  url: string | null;
+  event_types: string[] | null;
+  enabled: boolean;
+  available_event_types: string[];
+}
+
+export interface WebhookConfigBody {
+  url: string;
+  event_types?: string[] | null;
+  enabled: boolean;
+}
+
+export interface WebhookSecretResult {
+  webhook_secret: string;
+}
+
+export interface WebhookDeliveryItem {
+  id: string;
+  event_type: string;
+  attempted_at: string;
+  dest_url: string;
+  http_status: number | null;
+  latency_ms: number;
+  retry_count: number;
+  error_message: string | null;
+  status: string;
+}
+
+export interface WebhookDeliveriesResponse {
+  deliveries: WebhookDeliveryItem[];
+}
+
 // --- Payment History Cache ---
 
 /**

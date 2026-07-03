@@ -10,6 +10,17 @@ import {
   listLinks,
   getLinkDetail,
   revokeLink,
+  updateLinkMetadata,
+  listLinkEvents,
+  getLinksRollup,
+  getLinksSummary,
+  assignLinkGroup,
+  getLinkWebhook,
+  putLinkWebhook,
+  rotateLinkWebhookSecret,
+  testLinkWebhook,
+  listLinkWebhookDeliveries,
+  retryLinkWebhookDelivery,
 } from "../lib/api.js";
 import { signPayLink, stringifyNumbers, type PayLinkLit } from "../lib/pay-link-signer.js";
 import { newIdempotencyKey, recordIdempotency } from "../lib/idempotency.js";
@@ -18,6 +29,7 @@ import {
   resolveApiBase,
   loadSession,
   confirmTier2,
+  confirmMutation,
   promptLine,
   fail,
   usd,
@@ -392,6 +404,334 @@ export function registerLinksCommands(program: Command): void {
           return;
         }
         console.log(`${green("Pay-link revoked.")} ${r.link_id}${r.revoked_at ? dim(` at ${r.revoked_at}`) : ""}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  // --- update (metadata bag) ----------------------------------------------
+  links
+    .command("update <id>")
+    .description("Replace a link's metadata bag (does not touch signed terms) — Tier-2")
+    .option("--metadata <json>", "Full metadata JSON object, or omit with --clear")
+    .option("--clear", "Clear the metadata bag")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (id: string, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        if (!opts.clear && !opts.metadata) {
+          throw new Error("Pass --metadata <json> or --clear.");
+        }
+        let metadata: Record<string, unknown> | null = null;
+        if (!opts.clear) {
+          try {
+            metadata = JSON.parse(opts.metadata);
+          } catch {
+            throw new Error("--metadata must be a JSON object.");
+          }
+        }
+        const ok = await confirmMutation(
+          jsonOutput,
+          `Replace the metadata bag on link ${id}?`,
+          "update_link_metadata",
+          opts,
+        );
+        if (!ok) return;
+        const d = await updateLinkMetadata(apiBase, token, id, { metadata });
+        if (jsonOutput) {
+          console.log(JSON.stringify(d));
+          return;
+        }
+        console.log(`${green("Metadata updated.")} ${d.link_id}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  // --- events -------------------------------------------------------------
+  links
+    .command("events <id>")
+    .description("List a link's events (payments, webhook deliveries, …)")
+    .option("--types <csv>", "Comma-separated event_type filter")
+    .option("--after <id>", "Cursor: last event id of the previous page")
+    .option("--limit <n>", "Page size (1-200)", "50")
+    .action(async (id: string, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const qs = new URLSearchParams();
+        if (opts.types) qs.set("types", opts.types);
+        if (opts.after) qs.set("after", opts.after);
+        qs.set("limit", opts.limit);
+        const res = await listLinkEvents(apiBase, token, id, qs.toString());
+        if (jsonOutput) {
+          console.log(JSON.stringify(res));
+          return;
+        }
+        if (!res.events.length) {
+          console.log(dim("No events."));
+          return;
+        }
+        console.log(
+          formatTable(
+            ["When", "Event"],
+            res.events.map((e) => [e.created_at, e.event_type]),
+          ),
+        );
+        if (res.next_cursor) {
+          console.log(dim(`  more… --after ${res.next_cursor}`));
+        }
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  // --- rollup / summary ---------------------------------------------------
+  links
+    .command("rollup")
+    .description("Pay-link KPIs: 24h/total paid, MTD revenue, views, conversion")
+    .action(async (_opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const r = await getLinksRollup(apiBase, token);
+        if (jsonOutput) {
+          console.log(JSON.stringify(r));
+          return;
+        }
+        const conv = r.conversion === null ? dim("—") : `${(r.conversion * 100).toFixed(1)}%`;
+        console.log(`${bold("Paid 24h:")} ${r.paid_24h}   ${bold("Paid total:")} ${r.paid_total}   ${bold("MTD revenue:")} ${usd(r.mtd_revenue_usdc)}   ${bold("Views:")} ${r.views}   ${bold("Conversion:")} ${conv}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  links
+    .command("summary")
+    .description("Revenue + counts over a period")
+    .option("--period <p>", "24h | 7d | 30d | month | all", "all")
+    .action(async (opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const qs = new URLSearchParams();
+        qs.set("period", opts.period);
+        const r = await getLinksSummary(apiBase, token, qs.toString());
+        if (jsonOutput) {
+          console.log(JSON.stringify(r));
+          return;
+        }
+        console.log(`${bold("Period:")} ${r.period}   ${bold("Revenue:")} ${usd(r.revenue_usd)}   ${bold("Paid:")} ${r.paid_count}   ${bold("Links:")} ${r.link_count}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  // --- move (assign to a group) -------------------------------------------
+  links
+    .command("move <id> <group>")
+    .description("Move a link into a group (group = a group id, or 'none' to ungroup) — Tier-2")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (id: string, group: string, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const groupId = group === "none" || group === "null" ? null : group;
+        const ok = await confirmMutation(
+          jsonOutput,
+          `Move link ${id} ${groupId ? `into group ${groupId}` : "to ungrouped"}?`,
+          "move_link_group",
+          opts,
+        );
+        if (!ok) return;
+        const r = await assignLinkGroup(apiBase, token, id, groupId);
+        if (jsonOutput) {
+          console.log(JSON.stringify(r));
+          return;
+        }
+        console.log(`${green("Link moved.")} ${r.link_id} → ${r.group_id ?? dim("ungrouped")}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  // --- webhook sub-group --------------------------------------------------
+  const webhook = links
+    .command("webhook")
+    .description("Manage a pay-link's webhook (get/set/rotate/test/deliveries/retry)");
+
+  webhook
+    .command("get <id>")
+    .description("Show a link's webhook config")
+    .action(async (id: string, _opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const w = await getLinkWebhook(apiBase, token, id);
+        if (jsonOutput) {
+          console.log(JSON.stringify(w));
+          return;
+        }
+        console.log(`${bold("URL:")}     ${w.url ?? dim("— (not set)")}
+  ${bold("Enabled:")} ${w.enabled ? green("yes") : dim("no")}
+  ${bold("Events:")}  ${w.event_types ? w.event_types.join(", ") : dim("all")}
+  ${dim(`available: ${w.available_event_types.join(", ")}`)}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("set <id>")
+    .description("Set a link's webhook URL + subscribed events (Tier-2)")
+    .requiredOption("--url <url>", "Destination URL (https)")
+    .option("--events <csv>", "Comma-separated event_types (omit = all)")
+    .option("--disabled", "Create the webhook disabled")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (id: string, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const body = {
+          url: opts.url,
+          event_types: opts.events
+            ? opts.events.split(",").map((s: string) => s.trim()).filter(Boolean)
+            : null,
+          enabled: !opts.disabled,
+        };
+        const ok = await confirmMutation(
+          jsonOutput,
+          `Point link ${id}'s webhook at ${opts.url}?`,
+          "set_link_webhook",
+          opts,
+        );
+        if (!ok) return;
+        const w = await putLinkWebhook(apiBase, token, id, body);
+        if (jsonOutput) {
+          console.log(JSON.stringify(w));
+          return;
+        }
+        console.log(`${green("Webhook set.")} ${w.url} ${w.enabled ? green("enabled") : dim("disabled")}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("rotate <id>")
+    .description("Rotate the webhook signing secret — shown once (Tier-2)")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (id: string, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const ok = await confirmMutation(
+          jsonOutput,
+          `Rotate the webhook secret for link ${id}? The old secret stops validating signatures.`,
+          "rotate_webhook_secret",
+          opts,
+        );
+        if (!ok) return;
+        const r = await rotateLinkWebhookSecret(apiBase, token, id);
+        if (jsonOutput) {
+          console.log(JSON.stringify(r));
+          return;
+        }
+        console.log(`${green("Secret rotated.")}
+  ${bold("Webhook secret:")} ${r.webhook_secret} ${dim("(shown once)")}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("test <id>")
+    .description("Send a synthetic webhook.test delivery to smoke the endpoint")
+    .action(async (id: string, _opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const d = await testLinkWebhook(apiBase, token, id);
+        if (jsonOutput) {
+          console.log(JSON.stringify(d));
+          return;
+        }
+        console.log(`${green("Test delivery queued.")} ${d.id} → ${d.dest_url} ${dim(`(${d.status})`)}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("deliveries <id>")
+    .description("List recent webhook delivery attempts")
+    .option("--limit <n>", "Max rows (1-200)", "50")
+    .action(async (id: string, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const qs = new URLSearchParams();
+        qs.set("limit", opts.limit);
+        const res = await listLinkWebhookDeliveries(apiBase, token, id, qs.toString());
+        if (jsonOutput) {
+          console.log(JSON.stringify(res));
+          return;
+        }
+        if (!res.deliveries.length) {
+          console.log(dim("No deliveries."));
+          return;
+        }
+        console.log(
+          formatTable(
+            ["Delivery", "Event", "When", "HTTP", "Status", "Retries"],
+            res.deliveries.map((d) => [
+              d.id,
+              d.event_type,
+              d.attempted_at,
+              d.http_status === null ? dim("—") : String(d.http_status),
+              d.status === "delivered" ? green(d.status) : red(d.status),
+              String(d.retry_count),
+            ]),
+          ),
+        );
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  webhook
+    .command("retry <id> <delivery-id>")
+    .description("Re-queue one webhook delivery (Tier-2)")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (id: string, deliveryId: string, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        const token = await loadSession();
+        const ok = await confirmMutation(
+          jsonOutput,
+          `Re-queue webhook delivery ${deliveryId} for link ${id}?`,
+          "retry_webhook_delivery",
+          opts,
+        );
+        if (!ok) return;
+        const d = await retryLinkWebhookDelivery(apiBase, token, id, deliveryId);
+        if (jsonOutput) {
+          console.log(JSON.stringify(d));
+          return;
+        }
+        console.log(`${green("Delivery re-queued.")} ${d.id} ${dim(`(${d.status})`)}`);
       } catch (err) {
         fail(err);
       }

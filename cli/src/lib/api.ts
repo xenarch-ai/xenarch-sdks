@@ -43,6 +43,24 @@ import type {
   SiteClaimResult,
   BotCatalogResponse,
   BotActivityResponse,
+  PayLinkEventsResponse,
+  PayLinkRollup,
+  PayLinkSummary,
+  PayLinkMetadataBody,
+  PayLinkDetail,
+  LinkGroupAssignResult,
+  Group,
+  GroupCreateBody,
+  GroupUpdateBody,
+  GroupListResponse,
+  OrderListResponse,
+  Order,
+  ShipOrderBody,
+  WebhookConfig,
+  WebhookConfigBody,
+  WebhookSecretResult,
+  WebhookDeliveryItem,
+  WebhookDeliveriesResponse,
   SubscriberListResponse,
   SubscriberDetail,
   SubscriberChargesResponse,
@@ -1005,6 +1023,249 @@ export async function getBotCatalog(
   const res = await fetch(`${apiBase}/v1/bot-catalog`);
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()) as BotCatalogResponse;
+}
+
+// --- Pay-link detail surface, groups, orders, webhooks (SIWE) (XEN-518) ----
+
+export function updateLinkMetadata(
+  apiBase: string,
+  token: string,
+  linkId: string,
+  body: PayLinkMetadataBody,
+): Promise<PayLinkDetail> {
+  return meSessionRequest<PayLinkDetail>(
+    apiBase,
+    token,
+    "PATCH",
+    `/v1/links/${encodeURIComponent(linkId)}/metadata`,
+    body,
+  );
+}
+
+export function listLinkEvents(
+  apiBase: string,
+  token: string,
+  linkId: string,
+  query = "",
+): Promise<PayLinkEventsResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<PayLinkEventsResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/links/${encodeURIComponent(linkId)}/events${qs}`,
+  );
+}
+
+export function getLinksRollup(
+  apiBase: string,
+  token: string,
+): Promise<PayLinkRollup> {
+  return meSessionRequest<PayLinkRollup>(apiBase, token, "GET", "/v1/links/rollup");
+}
+
+export function getLinksSummary(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<PayLinkSummary> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<PayLinkSummary>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/links/summary${qs}`,
+  );
+}
+
+export function assignLinkGroup(
+  apiBase: string,
+  token: string,
+  linkId: string,
+  groupId: string | null,
+): Promise<LinkGroupAssignResult> {
+  return meSessionRequest<LinkGroupAssignResult>(
+    apiBase,
+    token,
+    "PATCH",
+    `/v1/links/${encodeURIComponent(linkId)}/group`,
+    { group_id: groupId },
+  );
+}
+
+// --- Groups ---------------------------------------------------------------
+
+export function listGroups(
+  apiBase: string,
+  token: string,
+): Promise<GroupListResponse> {
+  return meSessionRequest<GroupListResponse>(apiBase, token, "GET", "/v1/groups");
+}
+
+export function createGroup(
+  apiBase: string,
+  token: string,
+  body: GroupCreateBody,
+): Promise<Group> {
+  return meSessionRequest<Group>(apiBase, token, "POST", "/v1/groups", body);
+}
+
+export function updateGroup(
+  apiBase: string,
+  token: string,
+  groupId: string,
+  body: GroupUpdateBody,
+): Promise<Group> {
+  return meSessionRequest<Group>(
+    apiBase,
+    token,
+    "PATCH",
+    `/v1/groups/${encodeURIComponent(groupId)}`,
+    body,
+  );
+}
+
+export function deleteGroup(
+  apiBase: string,
+  token: string,
+  groupId: string,
+): Promise<void> {
+  return meSessionRequest<void>(
+    apiBase,
+    token,
+    "DELETE",
+    `/v1/groups/${encodeURIComponent(groupId)}`,
+  );
+}
+
+// --- Orders ---------------------------------------------------------------
+
+export function listOrders(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<OrderListResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<OrderListResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/orders${qs}`,
+  );
+}
+
+export function shipOrder(
+  apiBase: string,
+  token: string,
+  orderId: string,
+  body: ShipOrderBody,
+): Promise<Order> {
+  return meSessionRequest<Order>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/orders/${encodeURIComponent(orderId)}/ship`,
+    body,
+  );
+}
+
+export function exportOrdersCsv(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<string> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequestText(
+    apiBase,
+    token,
+    "GET",
+    `/v1/orders/export.csv${qs}`,
+  );
+}
+
+// --- Pay-link webhooks -----------------------------------------------------
+
+export function getLinkWebhook(
+  apiBase: string,
+  token: string,
+  linkId: string,
+): Promise<WebhookConfig> {
+  return meSessionRequest<WebhookConfig>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/links/${encodeURIComponent(linkId)}/webhook`,
+  );
+}
+
+export function putLinkWebhook(
+  apiBase: string,
+  token: string,
+  linkId: string,
+  body: WebhookConfigBody,
+): Promise<WebhookConfig> {
+  return meSessionRequest<WebhookConfig>(
+    apiBase,
+    token,
+    "PUT",
+    `/v1/links/${encodeURIComponent(linkId)}/webhook`,
+    body,
+  );
+}
+
+export function rotateLinkWebhookSecret(
+  apiBase: string,
+  token: string,
+  linkId: string,
+): Promise<WebhookSecretResult> {
+  return meSessionRequest<WebhookSecretResult>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/links/${encodeURIComponent(linkId)}/webhook/rotate-secret`,
+  );
+}
+
+export function testLinkWebhook(
+  apiBase: string,
+  token: string,
+  linkId: string,
+): Promise<WebhookDeliveryItem> {
+  return meSessionRequest<WebhookDeliveryItem>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/links/${encodeURIComponent(linkId)}/webhook/test`,
+  );
+}
+
+export function listLinkWebhookDeliveries(
+  apiBase: string,
+  token: string,
+  linkId: string,
+  query = "",
+): Promise<WebhookDeliveriesResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<WebhookDeliveriesResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/links/${encodeURIComponent(linkId)}/webhook-deliveries${qs}`,
+  );
+}
+
+export function retryLinkWebhookDelivery(
+  apiBase: string,
+  token: string,
+  linkId: string,
+  deliveryId: string,
+): Promise<WebhookDeliveryItem> {
+  return meSessionRequest<WebhookDeliveryItem>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/links/${encodeURIComponent(linkId)}/webhook-deliveries/${encodeURIComponent(deliveryId)}/retry`,
+  );
 }
 
 /** GET /v1/merchant-profile — null if the merchant has none yet. */
