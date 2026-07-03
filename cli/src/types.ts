@@ -165,6 +165,133 @@ export interface SiteStatsResponse {
   top_agents: Array<{ wallet: string; count: number; total_usd: string }>;
 }
 
+// --- Sites & gating (SIWE: /v1/me/sites/*, /v1/me/publisher/*) (XEN-518) ---
+// Money fields (default_price_usd, price_usd, amount_usd) arrive as JSON
+// strings (Decimal); gated_categories maps a category name → gated bool.
+
+export interface PriceRuleItem {
+  path: string;
+  price_usd: string;
+  billing_scope: "page" | "path";
+}
+
+/** GET /v1/me/sites/{id} — full owner detail (gating + pricing + rules). */
+export interface SiteDetail {
+  id: string;
+  domain: string | null;
+  default_price_usd: string;
+  default_billing_scope: string;
+  integration_type: string | null;
+  gating_enabled: boolean;
+  gated_categories: Record<string, boolean>;
+  site_token_hash: string;
+  created_at: string;
+  use_publisher_defaults: boolean;
+  rules: PriceRuleItem[];
+}
+
+/** PUT /v1/me/sites/{id}/pricing body (full replace). */
+export interface SitePricingBody {
+  default_price_usd: string;
+  default_billing_scope: "page" | "path";
+  rules: PriceRuleItem[];
+}
+
+export interface SitePricingResult {
+  rules_applied: number;
+}
+
+/** PUT /v1/me/sites/{id}/gating body (full replace). */
+export interface SiteGatingBody {
+  gating_enabled: boolean;
+  gated_categories: Record<string, boolean>;
+  use_publisher_defaults: boolean;
+}
+
+export interface SiteGatingResult {
+  gating_enabled: boolean;
+  gated_categories: Record<string, boolean>;
+  use_publisher_defaults: boolean;
+}
+
+export interface RotateTokenResult {
+  site_token: string;
+}
+
+export interface SiteTransactionItem {
+  id: string;
+  type: string;
+  path: string;
+  agent_name: string | null;
+  amount_usd: string;
+  status: string;
+  created_at: string;
+}
+
+export interface SiteTransactionsResponse {
+  transactions: SiteTransactionItem[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface CategoryBreakdownResponse {
+  categories: Array<{ category: string; earned_usd: string }>;
+}
+
+/** GET/PUT /v1/me/publisher/gating — publisher-level gating defaults. */
+export interface PublisherGating {
+  gating_enabled: boolean;
+  gated_categories: Record<string, boolean>;
+  bot_overrides: Record<string, string>;
+  publisher_id: string;
+}
+
+/** PUT body — `bot_overrides` omitted preserves the existing map. */
+export interface PublisherGatingBody {
+  gating_enabled: boolean;
+  gated_categories: Record<string, boolean>;
+  bot_overrides?: Record<string, string>;
+}
+
+/** POST /v1/me/site-claims body + response. */
+export interface SiteClaimBody {
+  integration_type: "wp" | "joomla" | "cf" | "sdk" | "cli" | "custom";
+  domain: string;
+}
+
+export interface SiteClaimResult {
+  site_id: string;
+  claim_token: string;
+  domain: string;
+  integration_type: string;
+  expires_in: number;
+}
+
+// --- Bots (GET /v1/bot-catalog public; /v1/me/publisher/bot-activity SIWE) ---
+
+export interface BotCatalogResponse {
+  categories: string[];
+  signatures: Array<{ name: string; category: string; company: string }>;
+  count: number;
+}
+
+export interface BotActivityItem {
+  signature: string;
+  category: string;
+  company: string;
+  sites_seen: number;
+  hit_count: number;
+  last_seen: string;
+  first_seen: string;
+}
+
+export interface BotActivityResponse {
+  activity: BotActivityItem[];
+  total_signatures: number;
+  window_days: number;
+}
+
 // --- Payment History Cache ---
 
 /**

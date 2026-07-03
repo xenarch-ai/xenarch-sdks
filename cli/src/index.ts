@@ -5,9 +5,11 @@ import { registerCheckCommand } from "./commands/check.js";
 import { registerPayCommand } from "./commands/pay.js";
 import { registerHistoryCommand } from "./commands/history.js";
 import { registerRegisterCommand } from "./commands/register.js";
-import { registerSiteAddCommand } from "./commands/site-add.js";
+import { registerSiteCommands } from "./commands/site.js";
 import { registerSitesCommand } from "./commands/sites.js";
 import { registerStatsCommand } from "./commands/stats.js";
+import { registerGatingCommands } from "./commands/gating.js";
+import { registerBotsCommands } from "./commands/bots.js";
 import { registerAgentCommands } from "./commands/agent.js";
 import { registerLinksCommands } from "./commands/links.js";
 import { registerPaymentsCommands } from "./commands/payments.js";
@@ -65,9 +67,11 @@ export function createProgram(): Command {
   // XEN-522: login + payout commands removed (passwordless auth; payout
   // wallet lives on the identity). register is now passwordless.
   registerRegisterCommand(program);
-  registerSiteAddCommand(program);
+  registerSiteCommands(program);
   registerSitesCommand(program);
   registerStatsCommand(program);
+  registerGatingCommands(program);
+  registerBotsCommands(program);
 
   return program;
 }

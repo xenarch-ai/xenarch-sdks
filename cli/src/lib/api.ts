@@ -29,6 +29,20 @@ import type {
   PayLinkDetail,
   PayLinkRevokeResponse,
   MerchantPaymentListResponse,
+  SiteDetail,
+  SitePricingBody,
+  SitePricingResult,
+  SiteGatingBody,
+  SiteGatingResult,
+  RotateTokenResult,
+  SiteTransactionsResponse,
+  CategoryBreakdownResponse,
+  PublisherGating,
+  PublisherGatingBody,
+  SiteClaimBody,
+  SiteClaimResult,
+  BotCatalogResponse,
+  BotActivityResponse,
   SubscriberListResponse,
   SubscriberDetail,
   SubscriberChargesResponse,
@@ -827,6 +841,170 @@ export function listMeteredCollectable(
     "GET",
     `/v1/subscribers/metered/collectable${qs}`,
   );
+}
+
+// --- Sites & gating (SIWE session: /v1/me/sites/*, /v1/me/publisher/*) ------
+// Distinct from the publisher `pk_` routes (/v1/sites) that `site add` / `sites`
+// use: these are the dashboard's wallet-session routes (XEN-518).
+
+export function getMeSite(
+  apiBase: string,
+  token: string,
+  siteId: string,
+): Promise<SiteDetail> {
+  return meSessionRequest<SiteDetail>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/me/sites/${encodeURIComponent(siteId)}`,
+  );
+}
+
+export function deleteMeSite(
+  apiBase: string,
+  token: string,
+  siteId: string,
+): Promise<void> {
+  return meSessionRequest<void>(
+    apiBase,
+    token,
+    "DELETE",
+    `/v1/me/sites/${encodeURIComponent(siteId)}`,
+  );
+}
+
+export function putSitePricing(
+  apiBase: string,
+  token: string,
+  siteId: string,
+  body: SitePricingBody,
+): Promise<SitePricingResult> {
+  return meSessionRequest<SitePricingResult>(
+    apiBase,
+    token,
+    "PUT",
+    `/v1/me/sites/${encodeURIComponent(siteId)}/pricing`,
+    body,
+  );
+}
+
+export function putSiteGating(
+  apiBase: string,
+  token: string,
+  siteId: string,
+  body: SiteGatingBody,
+): Promise<SiteGatingResult> {
+  return meSessionRequest<SiteGatingResult>(
+    apiBase,
+    token,
+    "PUT",
+    `/v1/me/sites/${encodeURIComponent(siteId)}/gating`,
+    body,
+  );
+}
+
+export function rotateSiteToken(
+  apiBase: string,
+  token: string,
+  siteId: string,
+): Promise<RotateTokenResult> {
+  return meSessionRequest<RotateTokenResult>(
+    apiBase,
+    token,
+    "POST",
+    `/v1/me/sites/${encodeURIComponent(siteId)}/rotate-token`,
+  );
+}
+
+export function getSiteTransactions(
+  apiBase: string,
+  token: string,
+  siteId: string,
+  query = "",
+): Promise<SiteTransactionsResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<SiteTransactionsResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/me/sites/${encodeURIComponent(siteId)}/transactions${qs}`,
+  );
+}
+
+export function getSiteCategoryBreakdown(
+  apiBase: string,
+  token: string,
+  siteId: string,
+): Promise<CategoryBreakdownResponse> {
+  return meSessionRequest<CategoryBreakdownResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/me/sites/${encodeURIComponent(siteId)}/category-breakdown`,
+  );
+}
+
+export function getPublisherGating(
+  apiBase: string,
+  token: string,
+): Promise<PublisherGating> {
+  return meSessionRequest<PublisherGating>(
+    apiBase,
+    token,
+    "GET",
+    "/v1/me/publisher/gating",
+  );
+}
+
+export function putPublisherGating(
+  apiBase: string,
+  token: string,
+  body: PublisherGatingBody,
+): Promise<PublisherGating> {
+  return meSessionRequest<PublisherGating>(
+    apiBase,
+    token,
+    "PUT",
+    "/v1/me/publisher/gating",
+    body,
+  );
+}
+
+export function createSiteClaim(
+  apiBase: string,
+  token: string,
+  body: SiteClaimBody,
+): Promise<SiteClaimResult> {
+  return meSessionRequest<SiteClaimResult>(
+    apiBase,
+    token,
+    "POST",
+    "/v1/me/site-claims",
+    body,
+  );
+}
+
+export function getBotActivity(
+  apiBase: string,
+  token: string,
+  query = "",
+): Promise<BotActivityResponse> {
+  const qs = query ? `?${query}` : "";
+  return meSessionRequest<BotActivityResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/me/publisher/bot-activity${qs}`,
+  );
+}
+
+/** GET /v1/bot-catalog — public, no auth. The full bot signature catalog. */
+export async function getBotCatalog(
+  apiBase: string,
+): Promise<BotCatalogResponse> {
+  const res = await fetch(`${apiBase}/v1/bot-catalog`);
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()) as BotCatalogResponse;
 }
 
 /** GET /v1/merchant-profile — null if the merchant has none yet. */
