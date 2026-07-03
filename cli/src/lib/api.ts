@@ -64,7 +64,6 @@ import type {
   PayLinkRollup,
   PayLinkSummary,
   PayLinkMetadataBody,
-  PayLinkDetail,
   LinkGroupAssignResult,
   Group,
   GroupCreateBody,

@@ -13,7 +13,7 @@ const program = createProgram();
 // (e.g. `--json | jq`) is never truncated by the exit.
 program
   .parseAsync()
-  .then(() => flushAndExit(process.exitCode ?? 0))
+  .then(() => flushAndExit(typeof process.exitCode === "number" ? process.exitCode : 0))
   .catch((err: unknown) => {
     console.error(err instanceof Error ? err.message : String(err));
     flushAndExit(1);
