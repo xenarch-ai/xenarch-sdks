@@ -85,6 +85,7 @@ import type {
   SubscribersRollup,
   PeriodCapResult,
   CollectableResponse,
+  CollectRecordResult,
   MerchantProfileResponse,
   MerchantProfileBody,
   PayLinkInitiateResponse,
@@ -963,6 +964,62 @@ export function listMeteredCollectable(
     token,
     "GET",
     `/v1/subscribers/metered/collectable${qs}`,
+  );
+}
+
+/**
+ * Record the merchant's on-chain USDC.transferFrom so the platform books the
+ * permit cycle / settles metered charges. Cannot go through meSessionRequest
+ * because a 202 (mined but below the required confirmation depth — XEN-574) is
+ * a 2xx that must NOT be treated as success: it means "keep polling the same
+ * tx". Surfaces that as {@link ClaimAwaitingConfirmationsError}; 402 = a real
+ * on-chain revert, 409 = not collectable, 503 = transient RPC.
+ */
+async function recordCollect(
+  apiBase: string,
+  token: string,
+  path: string,
+  txHash: string,
+): Promise<CollectRecordResult> {
+  const res = await fetch(`${apiBase}${path}`, {
+    method: "POST",
+    headers: {
+      Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ tx_hash: txHash }),
+  });
+  if (res.status === 401) throw new SessionExpiredError(await errorMessage(res));
+  if (res.status === 202) throw new ClaimAwaitingConfirmationsError();
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()) as CollectRecordResult;
+}
+
+export function collectPermit(
+  apiBase: string,
+  token: string,
+  subscriptionId: string,
+  txHash: string,
+): Promise<CollectRecordResult> {
+  return recordCollect(
+    apiBase,
+    token,
+    `/v1/subscribers/${encodeURIComponent(subscriptionId)}/permit/collect`,
+    txHash,
+  );
+}
+
+export function collectMetered(
+  apiBase: string,
+  token: string,
+  subscriptionId: string,
+  txHash: string,
+): Promise<CollectRecordResult> {
+  return recordCollect(
+    apiBase,
+    token,
+    `/v1/subscribers/${encodeURIComponent(subscriptionId)}/metered/collect`,
+    txHash,
   );
 }
 

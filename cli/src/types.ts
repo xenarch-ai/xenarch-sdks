@@ -602,6 +602,7 @@ export const USDC_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
   "function allowance(address owner, address spender) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
+  "function transferFrom(address from, address to, uint256 amount) returns (bool)",
   "function decimals() view returns (uint8)",
 ] as const;
 
@@ -987,6 +988,20 @@ export interface CollectableResponse {
   collectable: CollectableRow[];
   count: number;
   total_micro: number;
+}
+
+/**
+ * POST /v1/subscribers/{id}/permit|metered/collect result — the booked cycle /
+ * settled charges after the merchant's on-chain transferFrom is recorded.
+ * Permissive: we surface the key fields and carry the raw body.
+ */
+export interface CollectRecordResult {
+  subscription_id?: string;
+  status?: string;
+  cycle?: number | null;
+  tx_hash?: string;
+  value_usdc?: string;
+  [key: string]: unknown;
 }
 
 /** Writable merchant-profile fields (PUT body). */
