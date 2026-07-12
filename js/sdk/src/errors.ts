@@ -55,6 +55,20 @@ export class MissingSigningKeyError extends Error {
   }
 }
 
+/**
+ * Thrown when a `services.*` write (create/update/delete) is attempted without
+ * a configured publisher API key. Build the client with `{ publisherApiKey }`.
+ */
+export class MissingPublisherKeyError extends Error {
+  constructor() {
+    super(
+      "no publisher API key — pass `publisherApiKey` to manage services " +
+        "(create/update/delete authenticate as a publisher, not the merchant session)",
+    );
+    this.name = "MissingPublisherKeyError";
+  }
+}
+
 /** Thrown by `webhooks.verify(..., { throwOnFailure: true })` on a bad signature. */
 export class WebhookVerificationError extends Error {
   constructor(message: string) {
