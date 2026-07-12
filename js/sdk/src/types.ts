@@ -303,6 +303,155 @@ export interface CapSuggestionsBody {
   suggested_period_cap_usdc?: string | null;
 }
 
+// --- link webhook delivery management (XEN-637) ----------------------------
+
+/** One webhook delivery attempt for a link. `attempted_at` is ISO-8601. */
+export interface PayLinkWebhookDeliveryItem {
+  id: string;
+  event_type: string;
+  attempted_at: string;
+  dest_url: string;
+  /** HTTP status the destination returned; `null` on a transport error. */
+  http_status: number | null;
+  latency_ms: number;
+  retry_count: number;
+  error_message: string | null;
+  status: string;
+}
+
+export interface PayLinkWebhookDeliveriesResponse {
+  deliveries: PayLinkWebhookDeliveryItem[];
+}
+
+/** One-shot plaintext reveal of the link's webhook signing secret after a rotate. */
+export interface PayLinkWebhookSecretResponse {
+  webhook_secret: string;
+}
+
+/** Donation-link gross received, sub-cent-precise USDC decimal string. */
+export interface PayLinkAggregateResponse {
+  total_received_usd: string;
+}
+
+// --- subscriber reads (XEN-637) --------------------------------------------
+
+/** Portfolio rollup across a merchant's subscribers. `churn_30d` is `null` when the denominator is 0. */
+export interface SubscriberRollup {
+  active: number;
+  /** Monthly recurring revenue, USDC decimal quantized to cents (e.g. `"12.00"`). */
+  mrr_usdc: string;
+  cancelled_30d: number;
+  churn_30d: number | null;
+}
+
+export interface SubscriberHistoryItem {
+  cycle: number | null;
+  tx_hash: string;
+  status: "confirmed" | "underpaid" | "overpaid";
+  value_usdc: string;
+  value_micro_usdc: number;
+  block_number: number;
+  basescan_url: string;
+  created_at: string;
+}
+
+/**
+ * Full owner-side detail for one subscriber (`subscribers.get`). On the merchant
+ * read path `client_reference_id` is populated and `pay_next_url`/`cancel_token`
+ * are always `null`. `permit` and `billing` are dynamically-keyed maps (permit-
+ * and metered-mode only, `null` otherwise) — treat as open records.
+ */
+export interface SubscriberDetail {
+  subscription_id: string;
+  link_id: string;
+  is_metered: boolean;
+  status:
+    | "pending_email_verification"
+    | "active"
+    | "cancelled"
+    | "failed"
+    | "exhausted";
+  mode: "reminder" | "permit" | "stream";
+  issuer_name: string | null;
+  plan_name: string | null;
+  amount_usdc: string | null;
+  amount_micro_usdc: number | null;
+  currency: string;
+  cadence: string | null;
+  cadence_label: string | null;
+  next_renewal_at: string | null;
+  last_renewal_at: string | null;
+  cycles_paid: number;
+  payer_email: string | null;
+  payer_wallet: string | null;
+  client_reference_id: string | null;
+  email_status: "ok" | "bounced" | "complained";
+  created_at: string;
+  history: SubscriberHistoryItem[];
+  pay_next_url: string | null;
+  cancel_token: string | null;
+  permit: Record<string, unknown> | null;
+  billing: Record<string, unknown> | null;
+}
+
+export interface SubscriberChargeItem {
+  charge_seq: number;
+  status: "booked" | "settled" | "void";
+  accrued_units_billed: string;
+  billable_units: string;
+  value_usdc: string;
+  value_micro_usdc: number;
+  booked_at: string;
+  tx_hash: string | null;
+  settled_at: string | null;
+  block_number: number | null;
+  basescan_url: string | null;
+}
+
+export interface SubscriberChargesResponse {
+  subscription_id: string;
+  charges: SubscriberChargeItem[];
+  has_more: boolean;
+  /** Pass as `startingAfter` to page; `null` when no more. Cursor over `charge_seq`. */
+  next_cursor: number | null;
+  total_charged_micro: number;
+  total_collected_micro: number;
+  outstanding_micro: number;
+}
+
+export interface SubscriberChargesOptions {
+  /** 1–200, default 100. */
+  limit?: number;
+  /** A prior `next_cursor` (charge_seq); returns charges after it. */
+  startingAfter?: number;
+}
+
+/** Filters for the subscribers CSV export. `status`/`mode` match the list filters. */
+export interface SubscriberExportOptions {
+  linkId?: string;
+  status?: string;
+  mode?: string;
+}
+
+/** A short-lived payer manage-link the merchant can hand a subscriber. */
+export interface ManageLinkResponse {
+  manage_url: string;
+  manage_token: string;
+  expires_at: string;
+}
+
+export interface ManageLinkInput {
+  /** Link lifetime in seconds; clamped server-side to [60, 86400] (default 900). */
+  ttlSeconds?: number;
+}
+
+/** Filters for the orders CSV export. */
+export interface OrderExportOptions {
+  status?: string;
+  search?: string;
+  linkId?: string;
+}
+
 // --- collect() orchestration signer (XEN-634) ------------------------------
 
 /**

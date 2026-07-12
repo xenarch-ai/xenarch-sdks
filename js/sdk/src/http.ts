@@ -12,7 +12,7 @@
  * `detail` when present.
  */
 
-import { SESSION_COOKIE_NAME } from "@xenarch/core";
+import { SESSION_COOKIE_NAME, SessionExpiredError } from "@xenarch/core";
 
 async function errorMessage(res: Response): Promise<string> {
   try {
@@ -78,6 +78,25 @@ export async function sessionMultipart<T>(
   });
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()) as T;
+}
+
+/**
+ * GET returning the raw response body as text, authenticated with the SIWE
+ * `xen_session` cookie. Used by the CSV export endpoints, which reply with
+ * `text/csv` (not JSON) so the JSON helpers can't parse them.
+ */
+export async function sessionText(
+  apiBase: string,
+  sessionToken: string,
+  path: string,
+): Promise<string> {
+  const res = await fetch(`${apiBase}${path}`, {
+    method: "GET",
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${sessionToken}` },
+  });
+  if (res.status === 401) throw new SessionExpiredError(await errorMessage(res));
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return res.text();
 }
 
 /** snake_case query string from an options object; drops undefined/null. */

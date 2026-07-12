@@ -5,6 +5,7 @@ import {
   ConfirmationRequired,
   SessionExpiredError,
   MissingSigningKeyError,
+  MissingPublisherKeyError,
 } from "../src/index.js";
 
 describe("createXenarch", () => {
@@ -82,6 +83,18 @@ describe("v1.2 parity surface", () => {
     expect(sdk.merchant.subscribers.suspend).toBeInstanceOf(Function);
     expect(sdk.merchant.subscribers.unsuspend).toBeInstanceOf(Function);
     expect(sdk.merchant.links.capSuggestions).toBeInstanceOf(Function);
+    // XEN-637 data-plane parity
+    expect(sdk.merchant.links.webhookDeliveries).toBeInstanceOf(Function);
+    expect(sdk.merchant.links.rotateWebhookSecret).toBeInstanceOf(Function);
+    expect(sdk.merchant.links.retryWebhookDelivery).toBeInstanceOf(Function);
+    expect(sdk.merchant.links.testWebhook).toBeInstanceOf(Function);
+    expect(sdk.merchant.links.aggregate).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.rollup).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.get).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.charges).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.exportCsv).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.mintManageLink).toBeInstanceOf(Function);
+    expect(sdk.merchant.orders.exportCsv).toBeInstanceOf(Function);
     expect(sdk.agent.getCaps).toBeInstanceOf(Function);
     expect(sdk.agent.keys.create).toBeInstanceOf(Function);
     expect(sdk.info.usdcUsdRate).toBeInstanceOf(Function);
@@ -212,6 +225,248 @@ describe("subscribers.meteredCollectPrepare + collect (XEN-634)", () => {
     const recordCall = urls.find((u) => u.endsWith("/metered/collect"));
     expect(recordCall).toBe("https://api.test/v1/subscribers/sub_1/metered/collect");
     expect(res.settled_micro).toBe(6000700);
+  });
+});
+
+// --- XEN-637 data-plane parity ---------------------------------------------
+
+/** Stub fetch, capturing every call; reply with `json` (or `text` for CSV). */
+function stubFetch(reply: { json?: unknown; text?: string; status?: number }) {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
+    calls.push({ url, init });
+    if (reply.text !== undefined) {
+      return new Response(reply.text, {
+        status: reply.status ?? 200,
+        headers: { "Content-Type": "text/csv" },
+      });
+    }
+    return new Response(JSON.stringify(reply.json ?? {}), {
+      status: reply.status ?? 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  return calls;
+}
+
+describe("links webhook management (XEN-637)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const DELIVERY = {
+    id: "whd_1",
+    event_type: "payment.confirmed",
+    attempted_at: "2026-07-10T00:00:00Z",
+    dest_url: "https://merchant.test/hook",
+    http_status: 200,
+    latency_ms: 42,
+    retry_count: 0,
+    error_message: null,
+    status: "delivered",
+  };
+
+  it("webhookDeliveries GETs the delivery log with the limit query", async () => {
+    const calls = stubFetch({ json: { deliveries: [DELIVERY] } });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.links.webhookDeliveries("lnk_1", { limit: 10 });
+    expect(calls[0].url).toBe(
+      "https://api.test/v1/links/lnk_1/webhook-deliveries?limit=10",
+    );
+    expect(calls[0].init.method).toBe("GET");
+    expect(res.deliveries[0].id).toBe("whd_1");
+  });
+
+  it("rotateWebhookSecret POSTs and returns the one-shot secret", async () => {
+    const calls = stubFetch({ json: { webhook_secret: "whsec_new" } });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.links.rotateWebhookSecret("lnk_1");
+    expect(calls[0].url).toBe("https://api.test/v1/links/lnk_1/webhook/rotate-secret");
+    expect(calls[0].init.method).toBe("POST");
+    expect(res.webhook_secret).toBe("whsec_new");
+  });
+
+  it("retryWebhookDelivery POSTs to the nested delivery path", async () => {
+    const calls = stubFetch({ json: DELIVERY });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.links.retryWebhookDelivery("lnk_1", "whd_1");
+    expect(calls[0].url).toBe(
+      "https://api.test/v1/links/lnk_1/webhook-deliveries/whd_1/retry",
+    );
+    expect(calls[0].init.method).toBe("POST");
+    expect(res.status).toBe("delivered");
+  });
+
+  it("testWebhook POSTs to the test endpoint", async () => {
+    const calls = stubFetch({ json: { ...DELIVERY, event_type: "webhook.test" } });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.links.testWebhook("lnk_1");
+    expect(calls[0].url).toBe("https://api.test/v1/links/lnk_1/webhook/test");
+    expect(calls[0].init.method).toBe("POST");
+    expect(res.event_type).toBe("webhook.test");
+  });
+
+  it("aggregate GETs the donation total WITHOUT a session (public)", async () => {
+    const calls = stubFetch({ json: { total_received_usd: "123.4567" } });
+    // No session token — aggregate is a public endpoint.
+    const sdk = createXenarch({ apiBase: "https://api.test" });
+    const res = await sdk.merchant.links.aggregate("lnk_1");
+    expect(calls[0].url).toBe("https://api.test/v1/links/lnk_1/aggregate");
+    expect(calls[0].init.method).toBe("GET");
+    expect(res.total_received_usd).toBe("123.4567");
+  });
+});
+
+describe("subscribers reads (XEN-637)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("rollup GETs the portfolio rollup", async () => {
+    const calls = stubFetch({
+      json: { active: 3, mrr_usdc: "12.00", cancelled_30d: 1, churn_30d: 0.25 },
+    });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.subscribers.rollup();
+    expect(calls[0].url).toBe("https://api.test/v1/subscribers/rollup");
+    expect(calls[0].init.method).toBe("GET");
+    expect(res.mrr_usdc).toBe("12.00");
+    expect(res.churn_30d).toBe(0.25);
+  });
+
+  it("get GETs one subscriber's detail", async () => {
+    const calls = stubFetch({
+      json: { subscription_id: "sub_1", link_id: "lnk_1", status: "active" },
+    });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.subscribers.get("sub_1");
+    expect(calls[0].url).toBe("https://api.test/v1/subscribers/sub_1");
+    expect(calls[0].init.method).toBe("GET");
+    expect(res.subscription_id).toBe("sub_1");
+  });
+
+  it("charges GETs the ledger with limit + starting_after cursor", async () => {
+    const calls = stubFetch({
+      json: {
+        subscription_id: "sub_1",
+        charges: [],
+        has_more: false,
+        next_cursor: null,
+        total_charged_micro: 0,
+        total_collected_micro: 0,
+        outstanding_micro: 0,
+      },
+    });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.subscribers.charges("sub_1", {
+      limit: 50,
+      startingAfter: 7,
+    });
+    expect(calls[0].url).toBe(
+      "https://api.test/v1/subscribers/sub_1/charges?limit=50&starting_after=7",
+    );
+    expect(calls[0].init.method).toBe("GET");
+    expect(res.has_more).toBe(false);
+  });
+
+  it("exportCsv returns raw CSV text (not JSON-parsed) with filters", async () => {
+    const csv = "subscription_id,status\nsub_1,active\n";
+    const calls = stubFetch({ text: csv });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.subscribers.exportCsv({
+      linkId: "lnk_1",
+      status: "active",
+    });
+    expect(calls[0].url).toBe(
+      "https://api.test/v1/subscribers/export.csv?link_id=lnk_1&status=active",
+    );
+    expect(calls[0].init.method).toBe("GET");
+    expect(res).toBe(csv);
+  });
+
+  it("exportCsv maps a 401 to SessionExpiredError (re-auth catch works)", async () => {
+    stubFetch({ json: { detail: "session expired" }, status: 401 });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    await expect(sdk.merchant.subscribers.exportCsv()).rejects.toBeInstanceOf(
+      SessionExpiredError,
+    );
+  });
+
+  it("mintManageLink POSTs ttl_seconds and returns the manage url", async () => {
+    const calls = stubFetch({
+      json: {
+        manage_url: "https://pay.test/m/tok",
+        manage_token: "tok",
+        expires_at: "2026-07-10T00:15:00Z",
+      },
+    });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.subscribers.mintManageLink("sub_1", {
+      ttlSeconds: 600,
+    });
+    expect(calls[0].url).toBe("https://api.test/v1/subscribers/sub_1/manage-link");
+    expect(calls[0].init.method).toBe("POST");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ ttl_seconds: 600 });
+    expect(res.manage_token).toBe("tok");
+  });
+});
+
+describe("orders.exportCsv (XEN-637)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("returns raw CSV text with status + search + link_id filters", async () => {
+    const csv = "order_id,status\nord_1,shipped\n";
+    const calls = stubFetch({ text: csv });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.orders.exportCsv({
+      status: "shipped",
+      search: "acme",
+      linkId: "lnk_1",
+    });
+    expect(calls[0].url).toBe(
+      "https://api.test/v1/orders/export.csv?status=shipped&search=acme&link_id=lnk_1",
+    );
+    expect(res).toBe(csv);
+  });
+});
+
+describe("services auth (XEN-637)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("create authenticates with the publisher API key (Bearer), not the session", async () => {
+    const calls = stubFetch({ json: { id: "svc_1" } });
+    const sdk = createXenarch({
+      apiBase: "https://api.test",
+      sessionToken: "t",
+      publisherApiKey: "xen_live_pub",
+    });
+    await sdk.merchant.services.create({
+      name: "svc",
+      url: "https://svc.test",
+      pricePerRequest: "0.01",
+    });
+    expect(calls[0].url).toBe("https://api.test/v1/services");
+    expect(calls[0].init.method).toBe("POST");
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer xen_live_pub");
+  });
+
+  it("create without a publisher key throws before any network call", async () => {
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    await expect(
+      sdk.merchant.services.create({
+        name: "svc",
+        url: "https://svc.test",
+        pricePerRequest: "0.01",
+      }),
+    ).rejects.toBeInstanceOf(MissingPublisherKeyError);
+  });
+
+  it("list is public — works with no session and sends no auth", async () => {
+    const calls = stubFetch({ json: { services: [], total: 0, limit: 20, offset: 0 } });
+    const sdk = createXenarch({ apiBase: "https://api.test" });
+    const res = await sdk.merchant.services.list({ limit: 20 });
+    expect(calls[0].url).toBe("https://api.test/v1/services?limit=20");
+    const headers = (calls[0].init.headers ?? {}) as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+    expect(headers.Cookie).toBeUndefined();
+    expect(res.total).toBe(0);
   });
 });
 

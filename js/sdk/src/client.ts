@@ -64,11 +64,18 @@ import {
 
 import {
   ConfirmationRequired,
+  MissingPublisherKeyError,
   MissingSigningKeyError,
   NotGatedError,
   PayLinkValidationError,
 } from "./errors.js";
-import { bearerRequest, publicRequest, sessionMultipart, toQuery } from "./http.js";
+import {
+  bearerRequest,
+  publicRequest,
+  sessionMultipart,
+  sessionText,
+  toQuery,
+} from "./http.js";
 import { newIdempotencyKey, recordIdempotency } from "./idempotency.js";
 import type {
   UsageReportInput,
@@ -85,8 +92,20 @@ import type {
   PayLinkEventsResponse,
   PayLinkWebhookConfig,
   PayLinkWebhookConfigInput,
+  PayLinkWebhookDeliveriesResponse,
+  PayLinkWebhookDeliveryItem,
+  PayLinkWebhookSecretResponse,
+  PayLinkAggregateResponse,
+  SubscriberRollup,
+  SubscriberDetail,
+  SubscriberChargesResponse,
+  SubscriberChargesOptions,
+  SubscriberExportOptions,
+  ManageLinkResponse,
+  ManageLinkInput,
   LinkGroupAssignResponse,
   OrderListResponse,
+  OrderExportOptions,
   Order,
   ShipOrderInput,
   EarningsSummaryResponse,
@@ -114,6 +133,13 @@ export interface XenarchOptions {
   sessionToken?: string;
   /** The wallet private key (hex). Required for `links.create` (signs) and `x402.pay`. */
   privateKey?: string;
+  /**
+   * A publisher API key (`Authorization: Bearer …`). Required only for the
+   * `services.*` write methods (create/update/delete), which the platform
+   * authenticates as a publisher — a different identity from the merchant
+   * session. Service reads are public and need no key.
+   */
+  publisherApiKey?: string;
   /** Platform base URL. Defaults to `https://api.xenarch.dev`. */
   apiBase?: string;
   /** When true (default), `links.create` and `links.revoke` require `{ confirm: true }`. */
@@ -153,12 +179,14 @@ export class Xenarch {
 
   private readonly sessionToken?: string;
   private readonly privateKey?: string;
+  private readonly publisherApiKey?: string;
   private readonly requireConfirm: boolean;
 
   constructor(options: XenarchOptions = {}) {
     this.apiBase = (options.apiBase ?? DEFAULT_API_BASE).replace(/\/+$/, "");
     this.sessionToken = options.sessionToken;
     this.privateKey = options.privateKey;
+    this.publisherApiKey = options.publisherApiKey;
     this.requireConfirm = options.requireConfirm ?? true;
     this.merchant = new MerchantNamespace(this);
     this.x402 = new X402Namespace(this);
@@ -203,6 +231,12 @@ export class Xenarch {
   _signingKey(): string {
     if (!this.privateKey) throw new MissingSigningKeyError();
     return this.privateKey;
+  }
+
+  /** @internal */
+  _publisherKey(): string {
+    if (!this.publisherApiKey) throw new MissingPublisherKeyError();
+    return this.publisherApiKey;
   }
 
   /** @internal */
@@ -603,6 +637,70 @@ class LinksApi {
       { group_id: groupId },
     );
   }
+
+  /** Recent webhook delivery attempts for a link, newest-first (default 50, max 200). */
+  async webhookDeliveries(
+    linkId: string,
+    opts: { limit?: number } = {},
+  ): Promise<PayLinkWebhookDeliveriesResponse> {
+    const qs = toQuery({ limit: opts.limit });
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "GET",
+      `/v1/links/${encodeURIComponent(linkId)}/webhook-deliveries${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  /**
+   * Rotate the link's webhook signing secret. The new plaintext secret is
+   * returned ONCE — store it now; no other endpoint re-exposes it.
+   */
+  async rotateWebhookSecret(
+    linkId: string,
+  ): Promise<PayLinkWebhookSecretResponse> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "POST",
+      `/v1/links/${encodeURIComponent(linkId)}/webhook/rotate-secret`,
+    );
+  }
+
+  /** Re-attempt a single failed webhook delivery; returns the fresh attempt. */
+  async retryWebhookDelivery(
+    linkId: string,
+    deliveryId: string,
+  ): Promise<PayLinkWebhookDeliveryItem> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "POST",
+      `/v1/links/${encodeURIComponent(linkId)}/webhook-deliveries/${encodeURIComponent(deliveryId)}/retry`,
+    );
+  }
+
+  /** Send a `webhook.test` event to the link's configured endpoint; returns the attempt. */
+  async testWebhook(linkId: string): Promise<PayLinkWebhookDeliveryItem> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "POST",
+      `/v1/links/${encodeURIComponent(linkId)}/webhook/test`,
+    );
+  }
+
+  /**
+   * Gross USDC received for a donation link (public, no auth). 404s for a
+   * non-donation link. `total_received_usd` is a sub-cent-precise decimal string.
+   */
+  async aggregate(linkId: string): Promise<PayLinkAggregateResponse> {
+    return publicRequest(
+      this.c.apiBase,
+      "GET",
+      `/v1/links/${encodeURIComponent(linkId)}/aggregate`,
+    );
+  }
 }
 
 class PaymentsApi {
@@ -768,6 +866,75 @@ class SubscribersApi {
     }
     return this.meteredCollect(subscriptionId, { txHash: transferHash });
   }
+
+  /** Portfolio rollup: active count, MRR, 30-day cancellations + churn. */
+  async rollup(): Promise<SubscriberRollup> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "GET",
+      "/v1/subscribers/rollup",
+    );
+  }
+
+  /** Full owner-side detail for one subscriber (plan, permit/billing state, history). */
+  async get(subscriptionId: string): Promise<SubscriberDetail> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "GET",
+      `/v1/subscribers/${encodeURIComponent(subscriptionId)}`,
+    );
+  }
+
+  /**
+   * Per-charge ledger for a metered subscriber (booked/settled/void), plus
+   * charged/collected/outstanding totals. Cursor over `charge_seq` via
+   * `startingAfter` (a prior `next_cursor`); `limit` 1–200 (default 100).
+   */
+  async charges(
+    subscriptionId: string,
+    opts: SubscriberChargesOptions = {},
+  ): Promise<SubscriberChargesResponse> {
+    const qs = toQuery({ limit: opts.limit, starting_after: opts.startingAfter });
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "GET",
+      `/v1/subscribers/${encodeURIComponent(subscriptionId)}/charges${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  /** Export subscribers as CSV text. Optional `linkId` / `status` / `mode` filters. */
+  async exportCsv(opts: SubscriberExportOptions = {}): Promise<string> {
+    const qs = toQuery({
+      link_id: opts.linkId,
+      status: opts.status,
+      mode: opts.mode,
+    });
+    return sessionText(
+      this.c.apiBase,
+      this.c._session(),
+      `/v1/subscribers/export.csv${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  /**
+   * Mint a short-lived payer manage-link for a subscriber (the URL you hand the
+   * customer to update/cancel). `ttlSeconds` is clamped to [60, 86400] (default 900).
+   */
+  async mintManageLink(
+    subscriptionId: string,
+    opts: ManageLinkInput = {},
+  ): Promise<ManageLinkResponse> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "POST",
+      `/v1/subscribers/${encodeURIComponent(subscriptionId)}/manage-link`,
+      { ttl_seconds: opts.ttlSeconds },
+    );
+  }
 }
 
 /**
@@ -862,15 +1029,34 @@ class OrdersApi {
       { tracking: input.tracking, carrier: input.carrier },
     );
   }
+
+  /** Export orders as CSV text. Optional `status` / `search` / `linkId` filters. */
+  async exportCsv(opts: OrderExportOptions = {}): Promise<string> {
+    const qs = toQuery({
+      status: opts.status,
+      search: opts.search,
+      link_id: opts.linkId,
+    });
+    return sessionText(
+      this.c.apiBase,
+      this.c._session(),
+      `/v1/orders/export.csv${qs ? `?${qs}` : ""}`,
+    );
+  }
 }
 
 // --- services (x402 service registry) --------------------------------------
 
+/**
+ * The x402 service registry. Reads (`list`/`search`/`get`) are PUBLIC — no auth.
+ * Writes (`create`/`update`/`delete`) authenticate as a PUBLISHER, not the
+ * merchant session: build the client with `{ publisherApiKey }` or they throw.
+ */
 class ServicesApi {
   constructor(private readonly c: Xenarch) {}
 
   async create(input: ServiceCreateInput): Promise<ServiceResponse> {
-    return meSessionRequest(this.c.apiBase, this.c._session(), "POST", "/v1/services", {
+    return bearerRequest(this.c.apiBase, this.c._publisherKey(), "POST", "/v1/services", {
       name: input.name,
       url: input.url,
       description: input.description,
@@ -882,12 +1068,7 @@ class ServicesApi {
 
   async list(opts: { limit?: number; offset?: number } = {}): Promise<ServiceListResponse> {
     const qs = toQuery({ limit: opts.limit, offset: opts.offset });
-    return meSessionRequest(
-      this.c.apiBase,
-      this.c._session(),
-      "GET",
-      `/v1/services${qs ? `?${qs}` : ""}`,
-    );
+    return publicRequest(this.c.apiBase, "GET", `/v1/services${qs ? `?${qs}` : ""}`);
   }
 
   async search(opts: ServiceSearchOptions = {}): Promise<ServiceListResponse> {
@@ -899,27 +1080,21 @@ class ServicesApi {
       limit: opts.limit,
       offset: opts.offset,
     });
-    return meSessionRequest(
-      this.c.apiBase,
-      this.c._session(),
-      "GET",
-      `/v1/services/search${qs ? `?${qs}` : ""}`,
-    );
+    return publicRequest(this.c.apiBase, "GET", `/v1/services/search${qs ? `?${qs}` : ""}`);
   }
 
   async get(serviceId: string): Promise<ServiceResponse> {
-    return meSessionRequest(
+    return publicRequest(
       this.c.apiBase,
-      this.c._session(),
       "GET",
       `/v1/services/${encodeURIComponent(serviceId)}`,
     );
   }
 
   async update(serviceId: string, input: ServiceUpdateInput): Promise<ServiceResponse> {
-    return meSessionRequest(
+    return bearerRequest(
       this.c.apiBase,
-      this.c._session(),
+      this.c._publisherKey(),
       "PUT",
       `/v1/services/${encodeURIComponent(serviceId)}`,
       {
@@ -934,9 +1109,9 @@ class ServicesApi {
   }
 
   async delete(serviceId: string): Promise<Record<string, unknown>> {
-    return meSessionRequest(
+    return bearerRequest(
       this.c.apiBase,
-      this.c._session(),
+      this.c._publisherKey(),
       "DELETE",
       `/v1/services/${encodeURIComponent(serviceId)}`,
     );
