@@ -67,6 +67,40 @@ export interface MeteredCollectInput {
   txHash: string;
 }
 
+// --- automated collection: ready-to-sign calldata (XEN-634) ----------------
+
+/** One tx to sign+broadcast from your spender. `value` is always `"0"` (no ETH). */
+export interface MeteredCollectPrepareStep {
+  /** `"permit"` (present only when the permit isn't armed on-chain) or `"transferFrom"`. */
+  name: "permit" | "transferFrom";
+  /** USDC contract address. */
+  to: string;
+  /** ABI-encoded calldata (0x-hex). */
+  data: string;
+  value: string;
+}
+
+export interface MeteredCollectPrepareResponse {
+  subscription_id: string;
+  amount_micro: number;
+  amount_usdc: string;
+  /** Buyer wallet (`transferFrom` `from`). */
+  owner: string;
+  /** Your payout wallet = permit spender (`transferFrom` `to`, and the signer). */
+  spender: string;
+  /** USDC contract address. */
+  token: string;
+  chain_id: number;
+  /**
+   * Advisory affordability verdict from the last sweep. `false`/reason means the
+   * `transferFrom` step may revert (unfunded wallet); prepare returns the calldata
+   * anyway so you can decide. Xenarch never signs — you sign+broadcast the steps.
+   */
+  collectable: boolean | null;
+  collectable_reason: string | null;
+  steps: MeteredCollectPrepareStep[];
+}
+
 // --- fixed-permit settlement (merchant-pulled) -----------------------------
 
 export interface PermitCollectableItem {
@@ -247,4 +281,68 @@ export interface ReputationResponse {
 
 export interface ReceiptResponse {
   [k: string]: unknown;
+}
+
+// --- subscriber status transitions (XEN-558 / XEN-629) ---------------------
+
+/** Result of a merchant status action (suspend / unsuspend). */
+export interface SubscriberStatusResult {
+  subscription_id: string;
+  status: string;
+}
+
+// --- link cap suggestions (XEN-625) ----------------------------------------
+
+/**
+ * Whole-state PATCH for a metered link's two suggested cap prefills. Decimal
+ * USDC strings; `null` clears a suggestion (falls back to the signed param).
+ * Not part of signed_params, so this never invalidates the link signature.
+ */
+export interface CapSuggestionsBody {
+  suggested_cap_usdc?: string | null;
+  suggested_period_cap_usdc?: string | null;
+}
+
+// --- collect() orchestration signer (XEN-634) ------------------------------
+
+/**
+ * A minimal signer you supply (e.g. adapted from a viem WalletClient) so
+ * `subscribers.collect(...)` can broadcast the prepared steps. The SDK never
+ * holds your key — you sign+broadcast, the SDK only orchestrates the sequence.
+ */
+export interface CollectSigner {
+  /** Sign + broadcast a tx to `to` with `data` (value is always "0"); resolve to the tx hash. */
+  sendTransaction(tx: { to: string; data: string; value: string }): Promise<string>;
+  /** Optionally block until a tx is mined before the next step. */
+  waitForReceipt?(hash: string): Promise<unknown>;
+}
+
+// --- webhook event typing (XEN-631 / XEN-622) ------------------------------
+
+/** Every pay-link webhook `X-Xenarch-Event` value (mirrors PAY_LINK_EVENT_TYPES). */
+export type PayLinkEventType =
+  | "payment.confirmed"
+  | "payment.underpaid"
+  | "payment.overpaid"
+  | "subscription.renewed"
+  | "charge.booked"
+  | "charge.settled"
+  | "subscription.status_changed"
+  | "webhook.test";
+
+/**
+ * `data` payload of a `subscription.status_changed` event (XEN-631): fires on
+ * every status transition — negatives (`failed`=suspended, `exhausted`,
+ * `cancelled`) AND recoveries (`failed→active`, `exhausted→active`). Branch on
+ * `new_status`. `collectable_reason`/`collection_fail_count` are always present
+ * (null/0 on non-dunning transitions); `client_reference_id` present when set.
+ */
+export interface SubscriptionStatusChangedData {
+  subscription_id: string;
+  link_id: string;
+  old_status: string;
+  new_status: string;
+  collectable_reason: string | null;
+  collection_fail_count: number;
+  client_reference_id?: string;
 }
