@@ -77,6 +77,11 @@ describe("v1.2 parity surface", () => {
     expect(sdk.merchant.earnings).toBeDefined();
     expect(sdk.merchant.subscribers.meteredCollectable).toBeInstanceOf(Function);
     expect(sdk.merchant.subscribers.meteredCollect).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.meteredCollectPrepare).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.collect).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.suspend).toBeInstanceOf(Function);
+    expect(sdk.merchant.subscribers.unsuspend).toBeInstanceOf(Function);
+    expect(sdk.merchant.links.capSuggestions).toBeInstanceOf(Function);
     expect(sdk.agent.getCaps).toBeInstanceOf(Function);
     expect(sdk.agent.keys.create).toBeInstanceOf(Function);
     expect(sdk.info.usdcUsdRate).toBeInstanceOf(Function);
@@ -128,6 +133,110 @@ describe("usage.report (webhook_secret auth, no session needed)", () => {
       units: 7,
       idempotency_key: "k1",
       source: "webhook",
+    });
+  });
+});
+
+describe("subscribers.meteredCollectPrepare + collect (XEN-634)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const PREP = {
+    subscription_id: "sub_1",
+    amount_micro: 6000700,
+    amount_usdc: "6.0007",
+    owner: "0x2222222222222222222222222222222222222222",
+    spender: "0x7FE6b933cA47D4a4f2cD9A98c12592041e7Db993",
+    token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    chain_id: 8453,
+    collectable: true,
+    collectable_reason: null,
+    steps: [
+      { name: "permit", to: "0x8335", data: "0xd505accf", value: "0" },
+      { name: "transferFrom", to: "0x8335", data: "0x23b872dd", value: "0" },
+    ],
+  };
+
+  it("meteredCollectPrepare GETs the prepare endpoint and returns steps", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify(PREP), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.subscribers.meteredCollectPrepare("sub_1");
+    expect(calls[0].url).toBe(
+      "https://api.test/v1/subscribers/sub_1/metered/collect/prepare",
+    );
+    expect(calls[0].init.method).toBe("GET");
+    expect(res.steps.map((s) => s.name)).toEqual(["permit", "transferFrom"]);
+    expect(res.amount_usdc).toBe("6.0007");
+  });
+
+  it("collect orchestrates prepare → sign each step → record the transferFrom hash", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      urls.push(url);
+      if (url.endsWith("/metered/collect/prepare")) {
+        return new Response(JSON.stringify(PREP), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      // the record call
+      return new Response(
+        JSON.stringify({
+          subscription_id: "sub_1",
+          settled_count: 1,
+          settled_micro: 6000700,
+          status: "active",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    const signed: string[] = [];
+    const signer = {
+      async sendTransaction(tx: { to: string; data: string; value: string }) {
+        signed.push(tx.data);
+        return `0xhash_${tx.data.slice(0, 10)}`;
+      },
+    };
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.subscribers.collect("sub_1", signer);
+
+    // both steps signed, in order
+    expect(signed).toEqual(["0xd505accf", "0x23b872dd"]);
+    // recorded the TRANSFERFROM hash (not the permit hash)
+    const recordCall = urls.find((u) => u.endsWith("/metered/collect"));
+    expect(recordCall).toBe("https://api.test/v1/subscribers/sub_1/metered/collect");
+    expect(res.settled_micro).toBe(6000700);
+  });
+});
+
+describe("links.capSuggestions (XEN-625)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("PATCHes cap-suggestions with the decimal-string body", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ link_id: "lnk_1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    await sdk.merchant.links.capSuggestions("lnk_1", {
+      suggested_period_cap_usdc: "10",
+      suggested_cap_usdc: "100",
+    });
+    expect(calls[0].url).toBe("https://api.test/v1/links/lnk_1/cap-suggestions");
+    expect(calls[0].init.method).toBe("PATCH");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({
+      suggested_period_cap_usdc: "10",
+      suggested_cap_usdc: "100",
     });
   });
 });

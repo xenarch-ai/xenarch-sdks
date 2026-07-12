@@ -76,6 +76,10 @@ import type {
   MeteredCollectableResponse,
   MeteredCollectResponse,
   MeteredCollectInput,
+  MeteredCollectPrepareResponse,
+  SubscriberStatusResult,
+  CapSuggestionsBody,
+  CollectSigner,
   PermitCollectableResponse,
   PermitCollectResponse,
   PayLinkEventsResponse,
@@ -568,6 +572,24 @@ class LinksApi {
     );
   }
 
+  /**
+   * Set a metered link's two suggested cap prefills (whole-state PATCH, XEN-625).
+   * Decimal USDC strings; `null` clears a suggestion. Not signed, so this never
+   * invalidates the link signature or disturbs an active checkout.
+   */
+  async capSuggestions(
+    linkId: string,
+    body: CapSuggestionsBody,
+  ): Promise<PayLinkDetail> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "PATCH",
+      `/v1/links/${encodeURIComponent(linkId)}/cap-suggestions`,
+      body,
+    );
+  }
+
   /** Move a link into a group, or out of any group with `groupId = null`. */
   async assignGroup(
     linkId: string,
@@ -676,6 +698,75 @@ class SubscribersApi {
       "POST",
       `/v1/subscribers/${encodeURIComponent(subscriptionId)}/merchant-cancel`,
     );
+  }
+
+  /** Suspend a subscription (`status → "failed"`). Idempotent; non-custodial. */
+  async suspend(subscriptionId: string): Promise<SubscriberStatusResult> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "POST",
+      `/v1/subscribers/${encodeURIComponent(subscriptionId)}/suspend`,
+    );
+  }
+
+  /**
+   * Lift a suspension: `failed → active` (or `exhausted` if the permit is fully
+   * drawn). Clears the dunning counter. Idempotent; non-custodial (XEN-629).
+   */
+  async unsuspend(subscriptionId: string): Promise<SubscriberStatusResult> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "POST",
+      `/v1/subscribers/${encodeURIComponent(subscriptionId)}/unsuspend`,
+    );
+  }
+
+  /**
+   * Ready-to-sign calldata for collecting a metered subscriber's outstanding
+   * booked charges (XEN-634). Returns the `permit()` (only if not armed) +
+   * `transferFrom()` steps; you sign+broadcast each from your spender, then
+   * record via `meteredCollect`. Xenarch never signs. See `collect()` for the
+   * one-call flow.
+   */
+  async meteredCollectPrepare(
+    subscriptionId: string,
+  ): Promise<MeteredCollectPrepareResponse> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "GET",
+      `/v1/subscribers/${encodeURIComponent(subscriptionId)}/metered/collect/prepare`,
+    );
+  }
+
+  /**
+   * One-call automated collection (XEN-634): fetch the ready-to-sign steps,
+   * have your `signer` broadcast each (permit if needed, then transferFrom),
+   * then record the settlement. The dashboard "collect" button as a backend
+   * call. Xenarch stays verify-only — your signer moves the money; this only
+   * orchestrates the thin calls (like `x402.pay`, it holds no key of its own).
+   */
+  async collect(
+    subscriptionId: string,
+    signer: CollectSigner,
+  ): Promise<MeteredCollectResponse> {
+    const prep = await this.meteredCollectPrepare(subscriptionId);
+    let transferHash: string | undefined;
+    for (const step of prep.steps) {
+      const hash = await signer.sendTransaction({
+        to: step.to,
+        data: step.data,
+        value: step.value,
+      });
+      if (signer.waitForReceipt) await signer.waitForReceipt(hash);
+      if (step.name === "transferFrom") transferHash = hash;
+    }
+    if (!transferHash) {
+      throw new Error("collect: prepare returned no transferFrom step");
+    }
+    return this.meteredCollect(subscriptionId, { txHash: transferHash });
   }
 }
 
