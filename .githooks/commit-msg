@@ -1,7 +1,7 @@
 #!/bin/bash
 # Require Linear issue reference (XEN-XX) or [no-issue] in commit messages
 
-MSG=$(cat "$1")
+MSG=$(git stripspace --strip-comments < "$1")
 
 # Check for XEN- reference or [no-issue] escape hatch
 if echo "$MSG" | grep -qiE '(XEN-[0-9]+|\[no-issue\])'; then
