@@ -1,5 +1,5 @@
 #!/bin/bash
-# Require Linear issue reference (XEN-XX) or [no-issue] in commit messages
+# Require Retasc issue reference (XEN-XX) or [no-issue] in commit messages
 
 MSG=$(git stripspace --strip-comments < "$1")
 
@@ -9,7 +9,7 @@ if echo "$MSG" | grep -qiE '(XEN-[0-9]+|\[no-issue\])'; then
 fi
 
 echo ""
-echo "ERROR: Commit message must reference a Linear issue (XEN-XX) or include [no-issue]."
+echo "ERROR: Commit message must reference a Retasc issue (XEN-XX) or include [no-issue]."
 echo ""
 echo "Examples:"
 echo '  feat: add payment endpoint'
