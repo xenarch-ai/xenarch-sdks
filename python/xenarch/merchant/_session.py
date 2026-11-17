@@ -17,8 +17,10 @@ from typing import Any
 
 import httpx
 
+from xenarch._defaults import DEFAULT_API_BASE
+
 _SESSION_COOKIE = "xen_session"
-_DEFAULT_API_BASE = "https://api.xenarch.dev"
+_DEFAULT_API_BASE = DEFAULT_API_BASE
 _CONFIG_DIR = Path(os.path.expanduser("~")) / ".xenarch"
 
 

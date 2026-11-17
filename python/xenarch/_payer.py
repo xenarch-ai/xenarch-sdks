@@ -4,7 +4,7 @@
 commercial extras:
 
 - signed Ed25519 receipts fetched from the facilitator after each paid GET
-  (legacy V1 path against ``xenarch.dev``);
+  (legacy V1 path against ``api.xenarch.dev``);
 - opt-in reputation gate for receiver addresses;
 - post-XEN-179 V2 flow: when the resource server returns a Xenarch envelope
   (``xenarch: true`` + ``gate_id`` + ``facilitators[]``), settle directly
@@ -60,6 +60,7 @@ from xenarch._agent_preflight import (
     refusal_dict_from_decision,
 )
 from xenarch._agent_receipts import AgentReceiptReporter, build_payload
+from xenarch._defaults import DEFAULT_API_BASE
 from xenarch.client import GateResponse
 from xenarch.router import FacilitatorConfig, PaymentContext, Router
 
@@ -97,7 +98,7 @@ class XenarchPayer(X402Payer):
     def __init__(
         self,
         *,
-        facilitator_url: str = "https://xenarch.dev",
+        facilitator_url: str = DEFAULT_API_BASE,
         fetch_receipts: bool | None = None,
         verify_receipts: bool = True,
         facilitator_public_key_url: str | None = None,
@@ -107,7 +108,7 @@ class XenarchPayer(X402Payer):
         router: Router | None = None,
         facilitator_settle_timeout: float = 30.0,
         xenarch_token: str | None = None,
-        agent_control_plane_url: str = "https://xenarch.dev",
+        agent_control_plane_url: str = DEFAULT_API_BASE,
         **x402_kwargs: Any,
     ) -> None:
         super().__init__(**x402_kwargs)

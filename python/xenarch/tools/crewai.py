@@ -33,6 +33,7 @@ from typing import Any
 
 from pydantic import Field, PrivateAttr
 
+from xenarch._defaults import DEFAULT_API_BASE
 from xenarch._payer import XenarchPayer
 
 from ._budget import XenarchBudgetPolicy
@@ -63,7 +64,7 @@ class XenarchCrewaiPay(BaseTool):
     budget_policy: XenarchBudgetPolicy = Field(default_factory=XenarchBudgetPolicy)
 
     # --- Facilitator hooks ---------------------------------------------
-    facilitator_url: str = Field(default="https://xenarch.dev")
+    facilitator_url: str = Field(default=DEFAULT_API_BASE)
     fetch_receipts: bool | None = Field(default=None)
     verify_receipts: bool = Field(default=True)
     facilitator_public_key_url: str | None = Field(default=None)

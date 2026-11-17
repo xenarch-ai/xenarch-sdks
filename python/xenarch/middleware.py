@@ -25,6 +25,7 @@ import logging
 import time
 from typing import Any
 
+from xenarch._defaults import DEFAULT_API_BASE
 from xenarch.client import XenarchAPIError, XenarchClient
 from xenarch.detection import is_bot
 
@@ -54,7 +55,7 @@ class XenarchMiddleware:
         self,
         app: Any,
         site_token: str,
-        api_base: str = "https://xenarch.dev",
+        api_base: str = DEFAULT_API_BASE,
         excluded_paths: set[str] | None = None,
         cache_ttl_s: float = 300.0,
     ) -> None:
