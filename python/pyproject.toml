@@ -102,3 +102,9 @@ dev = [
     "pay.json>=1.1,<2",
     "crewai>=1.0",
 ]
+
+[tool.ruff.lint]
+# CI runs `uvx ruff`, which takes the newest release. Ruff widened its
+# default rule set after June 2026 and CI failed on untouched code, so the
+# rules are pinned to the set this code was written against.
+select = ["E4", "E7", "E9", "F"]
