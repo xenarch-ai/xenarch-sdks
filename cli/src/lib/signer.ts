@@ -20,7 +20,7 @@ export async function initSignClient(projectId: string): Promise<SignClientInsta
     metadata: {
       name: "Xenarch CLI",
       description: "Pay for gated content from the command line",
-      url: "https://xenarch.dev",
+      url: "https://xenarch.com",
       icons: [],
     },
     storage: storage as any,

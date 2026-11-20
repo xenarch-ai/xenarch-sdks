@@ -175,9 +175,9 @@ class TestXenarchClient:
             mock.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_default_api_base_is_xenarch_dev(self):
+    async def test_default_api_base_is_the_api_host(self):
         async with XenarchClient("token") as client:
-            assert client._api_base == "https://xenarch.dev"
+            assert client._api_base == "https://api.xenarch.dev"
             assert "v1" in str(client._client.base_url)
 
     @pytest.mark.asyncio

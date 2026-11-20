@@ -38,6 +38,7 @@ import json
 from decimal import Decimal
 from typing import Any
 
+from xenarch._defaults import DEFAULT_API_BASE
 from xenarch._payer import XenarchPayer
 
 from ._budget import XenarchBudgetPolicy
@@ -70,7 +71,7 @@ class XenarchAutogenPay:
         *,
         private_key: str,
         budget_policy: XenarchBudgetPolicy | None = None,
-        facilitator_url: str = "https://xenarch.dev",
+        facilitator_url: str = DEFAULT_API_BASE,
         fetch_receipts: bool | None = None,
         verify_receipts: bool = True,
         facilitator_public_key_url: str | None = None,

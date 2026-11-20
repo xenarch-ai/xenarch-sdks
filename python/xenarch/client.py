@@ -16,6 +16,8 @@ from typing import Self
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from xenarch._defaults import DEFAULT_API_BASE
+
 
 class PaymentRequirements(BaseModel):
     """One x402 v1 PaymentRequirements entry inside a 402 response."""
@@ -109,7 +111,7 @@ class XenarchClient:
     def __init__(
         self,
         site_token: str,
-        api_base: str = "https://xenarch.dev",
+        api_base: str = DEFAULT_API_BASE,
         timeout: float = 10.0,
     ) -> None:
         self._site_token = site_token

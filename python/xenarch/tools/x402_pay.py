@@ -38,6 +38,7 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field, PrivateAttr
 
+from xenarch._defaults import DEFAULT_API_BASE
 from xenarch._payer import XenarchPayer
 
 from ._budget import XenarchBudgetPolicy
@@ -65,7 +66,7 @@ class XenarchPay(BaseTool):
     budget_policy: XenarchBudgetPolicy = Field(default_factory=XenarchBudgetPolicy)
 
     # --- Facilitator hooks ---------------------------------------------
-    facilitator_url: str = Field(default="https://xenarch.dev")
+    facilitator_url: str = Field(default=DEFAULT_API_BASE)
 
     # Auto-on for Xenarch-operated facilitators, off for everyone else —
     # protects the vendor-neutral upstream story. Set True explicitly to

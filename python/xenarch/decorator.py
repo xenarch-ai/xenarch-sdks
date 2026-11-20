@@ -16,6 +16,7 @@ from typing import Any, Callable
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from xenarch._defaults import DEFAULT_API_BASE
 from xenarch.client import XenarchAPIError, XenarchClient
 from xenarch.detection import is_bot
 
@@ -27,7 +28,7 @@ TX_HASH_HEADER = "x-xenarch-tx-hash"
 
 def require_payment(
     site_token: str,
-    api_base: str = "https://xenarch.dev",
+    api_base: str = DEFAULT_API_BASE,
     cache_ttl_s: float = 300.0,
 ) -> Callable:
     """Decorator that gates a FastAPI route behind Xenarch payment.
