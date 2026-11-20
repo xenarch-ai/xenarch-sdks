@@ -1,0 +1,65 @@
+name: Publish — PyPI (OIDC Trusted Publishing)
+
+# Publishes the `xenarch` Python package to PyPI with NO stored token.
+# Authentication is PyPI Trusted Publishing: this workflow exchanges a
+# short-lived GitHub OIDC token with PyPI. Configure it once at
+#   pypi.org → project xenarch → Settings → Publishing → Add a GitHub publisher
+#   owner: xenarch-ai · repo: xenarch-sdks · workflow: publish-python.yml
+#   environment: pypi
+#
+# Trigger: a published GitHub Release whose tag is `python-v<version>`
+# (e.g. `python-v1.2.1`). The tag version must equal python/pyproject.toml.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref_name, 'python-v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # REQUIRED for OIDC trusted publishing
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Tag matches pyproject version
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          if [ "${TAG#python-v}" != "$VERSION" ]; then
+            echo "::error::tag $TAG does not match pyproject version $VERSION"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Test
+        run: uv run pytest
+
+      - name: Build
+        run: uv build
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist
