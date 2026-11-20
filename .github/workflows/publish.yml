@@ -4,7 +4,7 @@ name: Publish — npm (OIDC Trusted Publishing)
 # Trusted Publishing: this workflow exchanges a short-lived GitHub OIDC token
 # with the registry. Configure the trusted publisher once per package at
 #   npmjs.com → package → Settings → Trusted Publisher
-#   repo: emdevries/xenarch-sdks · workflow: publish.yml
+#   repo: xenarch-ai/xenarch-sdks · workflow: publish.yml
 #
 # NOTE: a package must already exist on npm before its trusted publisher can be
 # configured (npm has no "pending publisher"). The first publish of a brand-new
@@ -13,6 +13,7 @@ name: Publish — npm (OIDC Trusted Publishing)
 #
 # Trigger: a published GitHub Release whose tag names the package + version,
 # e.g. tag `react-v1.0.1` → publishes js/react. Manual runs via the Actions tab.
+# `python-v*` tags belong to publish-python.yml and are skipped here.
 
 on:
   release:
@@ -30,6 +31,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.ref_name, 'python-v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
