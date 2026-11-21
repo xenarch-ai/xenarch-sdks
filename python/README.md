@@ -1,6 +1,6 @@
 # xenarch — Python SDK for the agentic internet
 
-Xenarch is the non-custodial payment SDK for the agentic internet. Pay for and get paid through HTTP 402 + USDC micropayments on Base L2. Direct, on-chain settlement. 0% Xenarch fee — no Xenarch contract in the money flow. Gasless: the wallet only ever holds USDC — no other gas coin needed.
+Xenarch is the non-custodial payment SDK for the agentic internet. Pay for and get paid through HTTP 402 + USDC micropayments on Base L2. Direct, on-chain settlement. The seller pays Xenarch 1% of each payment. Gasless: the wallet only ever holds USDC — no other gas coin needed.
 
 One package, two sides of the market — for both humans in scripts and AI agents in workflows:
 
@@ -17,7 +17,7 @@ Plus FastAPI middleware to gate your own endpoints behind HTTP 402.
 | Works on any host | × (Cloudflare only) | ✓ | × (enterprise) | ✓ |
 | Non-custodial | × | × | × | ✓ (agent-to-publisher direct, no Xenarch contract) |
 | Agent needs ETH | n/a | n/a | n/a | ✓ never |
-| Fee | Platform rate | 2.9% + $0.30 | Platform rate | **0% — no Xenarch contract that *can* charge a fee** |
+| Fee | Platform rate | 2.9% + $0.30 | Platform rate | **1% per payment, paid by the seller.** |
 | Open standard | proprietary | proprietary | proprietary | x402 + pay.json (open) |
 
 Settlement happens on-chain via the x402 standard. Xenarch is never in the money flow.

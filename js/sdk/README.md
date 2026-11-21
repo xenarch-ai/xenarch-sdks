@@ -1,6 +1,6 @@
 # @xenarch/sdk — TypeScript SDK for the agentic internet
 
-Isomorphic TypeScript/JavaScript SDK for Xenarch. Pay for and get paid through HTTP 402 + USDC micropayments on Base L2. Direct, on-chain settlement. 0% Xenarch fee. Gasless: the wallet only ever holds USDC — no other gas coin needed.
+Isomorphic TypeScript/JavaScript SDK for Xenarch. Pay for and get paid through HTTP 402 + USDC micropayments on Base L2. Direct, on-chain settlement. The seller pays Xenarch 1% of each payment. Gasless: the wallet only ever holds USDC — no other gas coin needed.
 
 One package, two sides of the market — for both human devs and AI agents:
 

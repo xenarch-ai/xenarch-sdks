@@ -1,6 +1,6 @@
 # xenarch — CLI for Xenarch's x402 MCP server
 
-Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402–gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement on-chain. 0% Xenarch fee. The agent wallet only ever holds USDC — no ETH, no gas coin needed.
+Xenarch is a non-custodial x402 MCP server. Claude, Cursor and any MCP client pay for HTTP 402–gated content with USDC micropayments on Base L2. Direct agent-to-publisher settlement on-chain. The publisher pays Xenarch 1% of each payment. The agent wallet only ever holds USDC — no ETH, no gas coin needed.
 
 This package is the `xenarch` command-line tool. Use it from a terminal to manage an agent wallet, pay x402-gated URLs by hand, and (for publishers) register sites and check stats against the Xenarch API.
 
@@ -57,7 +57,7 @@ Two boundaries:
 - **x402 only.** It pays the x402 protocol, not other payment schemes — a Stripe-link / MPP invoice, for example, won't be paid.
 - **One-time only.** A single `pay` is one payment. Recurring **subscriptions** are a Xenarch-platform feature (permit / reminder pay-links), not something the CLI sets up against third parties.
 
-**0% fee and gasless apply only to Xenarch.** On a non-Xenarch endpoint, that server and its own settlement provider set the fees and pay the gas — Xenarch guarantees nothing there (not gaslessness, fees, or uptime). The "no ETH / no gas, 0% Xenarch fee" experience holds only when the gate is part of the Xenarch platform, where invoices, checkouts and subscriptions are first-class pay-link types.
+**On Xenarch gates, a third-party facilitator pays the gas, so the agent wallet holds only USDC.** On a non-Xenarch endpoint, that server and its settlement provider set the fees and pay the gas, and Xenarch guarantees nothing there. On Xenarch, the publisher pays Xenarch 1% of each payment.
 
 ## Agent control plane (required to pay)
 
