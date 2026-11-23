@@ -229,7 +229,7 @@ The `secret` is the pay-link's `whsec_...` (from link create / the dashboard web
 
 **Does the agent need ETH for gas?** No. USDC is the only token the agent wallet ever needs. Fund it with USDC and you're done.
 
-**What's the fee?** 0%. There is no Xenarch contract that *can* charge a fee — the architecture is structurally zero-fee, not a policy promise.
+**What's the fee?** The publisher pays Xenarch 1% of each payment, billed monthly. The agent pays the gate's price.
 
 **What's the max payment?** Agent-configurable. Default is unbounded; set `XENARCH_MAX_PAYMENT_USD` to cap per-call spend.
 
