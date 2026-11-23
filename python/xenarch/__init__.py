@@ -8,12 +8,12 @@ Two sides, one package:
   and subscribers, manage your merchant profile.
 - ``xenarch.webhooks`` — verify incoming webhook signatures on your backend.
 
-Payments are gasless — the agent wallet only ever holds USDC.
+Agent payments (x402) are gasless — the agent wallet only ever holds USDC.
 """
 
 from xenarch.detection import is_bot
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 
 def __getattr__(name: str):
