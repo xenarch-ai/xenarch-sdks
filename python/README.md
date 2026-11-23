@@ -1,6 +1,6 @@
 # xenarch — Python SDK for the agentic internet
 
-Xenarch is the non-custodial payment SDK for the agentic internet. Pay for and get paid through HTTP 402 + USDC micropayments on Base L2. Direct, on-chain settlement. The seller pays Xenarch 1% of each payment. Gasless: the wallet only ever holds USDC — no other gas coin needed.
+Xenarch is the non-custodial payment SDK for the agentic internet. Pay for and get paid through HTTP 402 + USDC micropayments on Base L2. Direct, on-chain settlement. The seller pays Xenarch 1% of each payment. Agent payments (x402) are gasless: the agent wallet only ever holds USDC, no other gas coin needed. People paying a pay link send an ordinary USDC transfer from their own wallet and pay Base's network fee, under a cent.
 
 One package, two sides of the market — for both humans in scripts and AI agents in workflows:
 
