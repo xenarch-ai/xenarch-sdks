@@ -6,7 +6,7 @@
  *   - `sdk.merchant` — get paid: pay-links, payments, subscribers, profile.
  *   - `sdk.webhooks` — verify incoming webhook signatures.
  *
- * Gasless USDC on Base. 0% Xenarch fee. Runs on Node, Bun, Deno, and edge.
+ * Agents pay in USDC on Base without ETH. Sellers pay Xenarch 1% per payment. Runs on Node, Bun, Deno, and edge.
  *
  *     import { createXenarch } from "@xenarch/sdk";
  *     const sdk = createXenarch({ sessionToken, privateKey });
