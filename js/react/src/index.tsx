@@ -34,6 +34,14 @@ import {
 export const HOSTED_ORIGIN = "https://pay.xenarch.com";
 const HOSTED_BASE = `${HOSTED_ORIGIN}/l/`;
 
+// Permissions the embedded checkout needs, delegated to the hosted origin
+// only. Without `clipboard-write`, Chrome rejects navigator.clipboard
+// .writeText inside a cross-origin iframe, so the "Copy" buttons on the
+// "Pay from another app" panel (and AppKit's "Copy link") write nothing
+// while still showing "Copied" (XEN-690, verified on a real embed).
+// Wallet payments (WalletConnect QR / deep link) need no grant.
+const IFRAME_ALLOW = `clipboard-write ${HOSTED_ORIGIN}`;
+
 // Same regex the @xenarch/embed snippet uses — alphanumeric + dash/
 // underscore, 6-64 chars. Refuses anything injection-shaped without
 // over-constraining the ID space for future link-id revs.
@@ -335,9 +343,7 @@ export function XenarchCheckout({
           ...style,
         }}
         title="Xenarch checkout"
-        // No allow attribute — the hosted checkout opens WalletConnect
-        // via deep links / QR rather than browser features. Add allow=
-        // here if a future payment path needs camera/clipboard/etc.
+        allow={IFRAME_ALLOW}
       />
     );
   }
@@ -384,6 +390,7 @@ export function XenarchCheckout({
               src={modalSrc}
               style={modalFrameStyle}
               title="Xenarch checkout"
+              allow={IFRAME_ALLOW}
             />
           </div>
         </div>
