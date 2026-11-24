@@ -92,7 +92,8 @@ type XenarchEvent = {
 - The component only acts on `postMessage` events whose `event.origin === "https://pay.xenarch.com"`. Messages from other origins are silently ignored.
 - The `linkId` on incoming messages must match the prop on the rendered component, so a different iframe on the same page firing events can't trigger callbacks on this one.
 - `txHash` is only surfaced when it matches `/^0x[0-9a-fA-F]{64}$/`. The hash is for UX only — for crediting customers or fulfilling orders, verify against your dashboard or a webhook, not the postMessage payload.
-- The iframe loads with no permission grants. Add an `allow=` attribute via the `style`/`className` escape hatch only if you actually need camera/clipboard.
+- The iframe (modal and inline) is rendered with `allow="clipboard-write https://pay.xenarch.com"`, which grants one permission, to the hosted checkout's origin only. Without it, browsers block the clipboard inside a cross-origin iframe, so the checkout's "Copy" buttons (address, amount, WalletConnect link) silently write nothing. No other permission is granted. Wallet payments over WalletConnect (QR or deep link) need none: they were verified end-to-end from both embed modes on Base mainnet (XEN-690).
+- If your page sets a `Permissions-Policy` header, allow `clipboard-write` for `https://pay.xenarch.com` (for example `Permissions-Policy: clipboard-write=(self "https://pay.xenarch.com")`), or the iframe's grant can't take effect.
 
 ## Lower-level escape hatches
 

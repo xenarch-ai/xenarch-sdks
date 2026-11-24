@@ -1,6 +1,6 @@
 {
   "name": "@xenarch/react",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "React component for Xenarch pay links — drop-in <XenarchCheckout/> with redirect / modal / inline modes.",
   "keywords": [
