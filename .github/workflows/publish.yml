@@ -12,7 +12,8 @@ name: Publish — npm (OIDC Trusted Publishing)
 # that flows through here.
 #
 # Trigger: a published GitHub Release whose tag names the package + version,
-# e.g. tag `react-v1.0.1` → publishes js/react. Manual runs via the Actions tab.
+# e.g. tag `react-v1.0.1` → publishes js/react, `cli-v1.4.1` → publishes cli/
+# (npm package `xenarch`). Manual runs via the Actions tab.
 # `python-v*` tags belong to publish-python.yml and are skipped here.
 
 on:
@@ -21,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Package dir under js/ to publish (e.g. react, embed)"
+        description: "Package to publish: a dir under js/ (e.g. react, embed) or cli"
         required: true
         type: string
 
@@ -61,11 +62,18 @@ jobs:
           else
             DIR="${GITHUB_REF_NAME%%-v*}"
           fi
-          if [ ! -d "js/$DIR" ]; then
-            echo "::error::js/$DIR not found (derived from '${GITHUB_REF_NAME}')"
+          if ! printf '%s' "$DIR" | grep -Eq '^[a-z0-9-]+$'; then
+            echo "::error::invalid package name '$DIR'"
             exit 1
           fi
-          echo "dir=js/$DIR" >> "$GITHUB_OUTPUT"
+          # The CLI (npm package `xenarch`) lives at the repo root's cli/;
+          # every other JS package lives under js/.
+          if [ "$DIR" = "cli" ]; then PKG_DIR="cli"; else PKG_DIR="js/$DIR"; fi
+          if [ ! -d "$PKG_DIR" ]; then
+            echo "::error::$PKG_DIR not found (derived from '${GITHUB_REF_NAME}')"
+            exit 1
+          fi
+          echo "dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         working-directory: ${{ steps.pkg.outputs.dir }}
