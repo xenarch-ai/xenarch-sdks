@@ -32,8 +32,8 @@ Renders an `<a>` styled like a button. Click → navigates to `pay.xenarch.com/l
 <XenarchCheckout
   linkId="abc123def456"
   mode="modal"
-  onPaid={({ linkId, txHash }) => {
-    console.log("paid", linkId, txHash);
+  onPaid={({ linkId, txHash, network, token }) => {
+    console.log("paid", linkId, txHash, token, network);
     // show your thank-you UI
   }}
   onClose={() => console.log("modal dismissed")}
@@ -42,7 +42,7 @@ Renders an `<a>` styled like a button. Click → navigates to `pay.xenarch.com/l
 </XenarchCheckout>
 ```
 
-Renders a `<button>`. Click → opens a modal overlay containing an iframe of the hosted checkout. The modal auto-closes on payment confirmation; `onPaid` fires with `{linkId, txHash}`. Backdrop click, X button, and Esc all dismiss.
+Renders a `<button>`. Click → opens a modal overlay containing an iframe of the hosted checkout. The modal auto-closes on payment confirmation; `onPaid` fires with `{linkId, txHash, network, token}`. Backdrop click, X button, and Esc all dismiss.
 
 ### Inline mode
 
@@ -83,15 +83,19 @@ type XenarchEvent = {
     | "xenarch:revoked"
     | "xenarch:close";
   linkId: string;
-  txHash?: string;  // present on `xenarch:paid` after on-chain confirmation
+  txHash?: string;   // present on `xenarch:paid` after on-chain confirmation
+  network?: string;  // "base" | "ethereum" | "bnb" | "monad" | "tron"
+  token?: string;    // "USDC" | "USDT" (Monad's USDT0 arrives as "USDT")
 };
 ```
+
+A link can take USDC on Base, Ethereum, BNB Chain and Monad, and USDT on Ethereum, BNB Chain, Monad (USDT0) and Tron, as its owner picks. `network` and `token` say which one paid. `xenarch:underpaid` carries them too when the amount arrived short.
 
 ## Security
 
 - The component only acts on `postMessage` events whose `event.origin === "https://pay.xenarch.com"`. Messages from other origins are silently ignored.
 - The `linkId` on incoming messages must match the prop on the rendered component, so a different iframe on the same page firing events can't trigger callbacks on this one.
-- `txHash` is only surfaced when it matches `/^0x[0-9a-fA-F]{64}$/`. The hash is for UX only — for crediting customers or fulfilling orders, verify against your dashboard or a webhook, not the postMessage payload.
+- `txHash` is only surfaced when it matches `/^(0x)?[0-9a-fA-F]{64}$/` (Tron hashes carry no `0x`); `network` and `token` only when they are short plain identifiers. The hash is for UX only — for crediting customers or fulfilling orders, verify against your dashboard or a webhook, not the postMessage payload.
 - The iframe (modal and inline) is rendered with `allow="clipboard-write https://pay.xenarch.com"`, which grants one permission, to the hosted checkout's origin only. Without it, browsers block the clipboard inside a cross-origin iframe, so the checkout's "Copy" buttons (address, amount, WalletConnect link) silently write nothing. No other permission is granted. Wallet payments over WalletConnect (QR or deep link) need none: they were verified end-to-end from both embed modes on Base mainnet (XEN-690).
 - If your page sets a `Permissions-Policy` header, allow `clipboard-write` for `https://pay.xenarch.com` (for example `Permissions-Policy: clipboard-write=(self "https://pay.xenarch.com")`), or the iframe's grant can't take effect.
 
