@@ -9,6 +9,8 @@
  * present; callers should treat unlisted fields as best-effort.
  */
 
+import type { MerchantPaymentItem as CoreMerchantPaymentItem } from "@xenarch/core";
+
 // --- usage ingestion (metered subscriptions) -------------------------------
 
 /** Body for `merchant.usage.report`. `units` is a positive increment, NOT a
@@ -163,6 +165,135 @@ export interface LinkGroupAssignResponse {
   group_id: string | null;
 }
 
+// --- networks (XEN-678 / XEN-708) -----------------------------------------
+
+/** One stablecoin on a network, as `GET /v1/networks` lists it. */
+export interface NetworkCoin {
+  /** As the API and webhooks report it: `USDC` or `USDT`. */
+  symbol: string;
+  /** As wallets show it (e.g. `USDT0` on Monad). */
+  display: string;
+  address: string;
+  decimals: number;
+}
+
+/** One network this server takes pay-link payments on (`GET /v1/networks`). */
+export interface NetworkInfo {
+  network: string;
+  name: string;
+  label: string;
+  kind: "evm" | "tron" | string;
+  /** `null` on Tron. */
+  chain_id: number | null;
+  standard: string;
+  native_symbol: string;
+  confirmations: number;
+  /** `false` = paid by sending to the address (e.g. from an exchange), no wallet connect. */
+  wallet: boolean;
+  explorer_name: string;
+  /** URL template with `{tx}`. */
+  explorer_tx: string;
+  /** Base USDC is on for every link; the rest are each link's opt-in. */
+  always_on: boolean;
+  /** A non-EVM network pays its own address (Tron's T-address), set as `pay_to`. */
+  needs_pay_to: boolean;
+  coins: NetworkCoin[];
+}
+
+export interface NetworksResponse {
+  networks: NetworkInfo[];
+}
+
+/** A network a link currently takes, with the address it pays to there. */
+export interface LinkNetworkOffer {
+  network: string;
+  name: string;
+  label: string;
+  kind: string;
+  chain_id: number | null;
+  standard: string;
+  native_symbol: string;
+  confirmations: number;
+  wallet: boolean;
+  explorer_name: string;
+  explorer_tx: string;
+  pay_to: string;
+  tokens: { symbol: string; address: string; decimals: number }[];
+}
+
+/** A network the link owner can turn on (`available` in the networks response). */
+export interface LinkNetworkChoiceOption {
+  network: string;
+  name: string;
+  label: string;
+  kind: string;
+  standard: string;
+  wallet: boolean;
+  explorer_name: string;
+  tokens: string[];
+  always_on: boolean;
+  needs_pay_to: boolean;
+}
+
+/**
+ * What a link takes beyond Base USDC, keyed by network:
+ * `{ ethereum: { tokens: ["USDC", "USDT"] }, tron: { tokens: ["USDT"], pay_to: "T…" } }`.
+ * Whole-state: `{}` goes back to Base USDC only.
+ */
+export type LinkNetworksChoice = Record<string, { tokens: string[]; pay_to?: string }>;
+
+export interface LinkNetworksResponse {
+  link_id: string;
+  /** The stored choice (`null` = Base USDC only). */
+  accepted_networks: Record<string, { tokens: string[]; pay_to?: string }> | null;
+  /** Every network the link takes now, Base first. */
+  networks: LinkNetworkOffer[];
+  /** Every network this server can turn on, with its coins. */
+  available: LinkNetworkChoiceOption[];
+}
+
+/** One (network, coin) balance from `GET /v1/links/{id}/wallet-scan`. */
+export interface WalletScanBalance {
+  network: string;
+  token: string;
+  chain_id: number | null;
+  decimals: number;
+  /** Balance in 6-decimal micro units, as a string. */
+  balance_micro: string;
+  native_symbol: string;
+  native_balance: string;
+  /** Estimated network fee to pay this link, in the native coin. */
+  fee_native: string;
+  fee_usd: string | null;
+  /** Whether the wallet holds enough of the native coin for the fee. */
+  has_gas: boolean;
+  confirmations: number;
+}
+
+export interface WalletScanResponse {
+  address: string;
+  balances: WalletScanBalance[];
+  /** Networks whose RPC could not be read this time. */
+  unavailable: string[];
+}
+
+/** The coin and network a payment used (same names as the payment.* webhook payload). */
+export interface PaymentNetworkFields {
+  network: string;
+  token: string;
+  chain_id: number | null;
+  explorer_url: string | null;
+}
+
+/** A received payment (`GET /v1/payments/received`), with its coin and network. */
+export interface MerchantPaymentItem extends CoreMerchantPaymentItem, PaymentNetworkFields {}
+
+export interface MerchantPaymentListResponse {
+  payments: MerchantPaymentItem[];
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
 // --- orders ----------------------------------------------------------------
 
 export interface Order {
@@ -179,6 +310,14 @@ export interface Order {
   tracking: string | null;
   tx_hash: string;
   paid_at: string;
+  /** Network the payment arrived on (a `GET /v1/networks` key: base, ethereum, bnb, monad, tron). */
+  network: string;
+  /** Stablecoin paid: `USDC` or `USDT`. Amounts are in this coin's units. */
+  token: string;
+  /** EVM chain id of the network; `null` on Tron. */
+  chain_id: number | null;
+  /** The transaction on that network's block explorer. */
+  explorer_url: string | null;
 }
 
 export interface OrderListResponse {

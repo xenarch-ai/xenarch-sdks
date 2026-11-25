@@ -13,7 +13,7 @@ Agent payments (x402) are gasless — the agent wallet only ever holds USDC.
 
 from xenarch.detection import is_bot
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
 
 
 def __getattr__(name: str):

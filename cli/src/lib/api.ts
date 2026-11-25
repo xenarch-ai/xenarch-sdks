@@ -91,6 +91,9 @@ import type {
   PayLinkInitiateResponse,
   PayLinkClaimResponse,
   PaymentRequirements,
+  LinkNetworksChoice,
+  LinkNetworksResponse,
+  NetworksResponse,
 } from "../types.js";
 import { GATE_ID_HEADER, TX_HASH_HEADER, SESSION_COOKIE_NAME } from "../types.js";
 
@@ -1342,6 +1345,45 @@ export function exportOrdersCsv(
     token,
     "GET",
     `/v1/orders/export.csv${qs}`,
+  );
+}
+
+// --- Pay-link networks (XEN-678 / XEN-719) ---------------------------------
+
+/** GET /v1/networks — public: every network and coin this server takes. */
+export async function getNetworks(apiBase: string): Promise<NetworksResponse> {
+  const res = await fetch(`${apiBase}/v1/networks`);
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()) as NetworksResponse;
+}
+
+/** GET /v1/links/:id/networks — owner: which networks the link takes. */
+export function getLinkNetworks(
+  apiBase: string,
+  token: string,
+  linkId: string,
+): Promise<LinkNetworksResponse> {
+  return meSessionRequest<LinkNetworksResponse>(
+    apiBase,
+    token,
+    "GET",
+    `/v1/links/${encodeURIComponent(linkId)}/networks`,
+  );
+}
+
+/** PUT /v1/links/:id/networks — whole-state; `{}` = Base USDC only. */
+export function putLinkNetworks(
+  apiBase: string,
+  token: string,
+  linkId: string,
+  networks: LinkNetworksChoice,
+): Promise<LinkNetworksResponse> {
+  return meSessionRequest<LinkNetworksResponse>(
+    apiBase,
+    token,
+    "PUT",
+    `/v1/links/${encodeURIComponent(linkId)}/networks`,
+    { networks },
   );
 }
 

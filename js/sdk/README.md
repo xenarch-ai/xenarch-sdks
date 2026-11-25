@@ -66,6 +66,22 @@ await sdk.merchant.links.revoke(link.link_id, { confirm: true });
 
 `create` always validates first, so "validate ok ⇒ create ok". It throws `PayLinkValidationError` (with `.missing` / `.errors`) when the params are incomplete. An `Idempotency-Key` is generated per create (dedupes a network-level retry of that one request).
 
+### Networks and coins
+
+Every link takes USDC on Base. Owners can also accept USDC and USDT on Ethereum, BNB Chain and Monad, and USDT on Tron:
+
+```ts
+await sdk.merchant.links.availableNetworks();       // every network + coin this server takes (public)
+await sdk.merchant.links.networks("lnk_…");         // what this link takes now
+await sdk.merchant.links.setNetworks("lnk_…", {     // whole-state; {} = Base USDC only
+  ethereum: { tokens: ["USDC", "USDT"] },
+  tron: { tokens: ["USDT"], pay_to: "T…" },          // Tron pays the store's T-address
+});
+await sdk.merchant.links.walletScan("lnk_…", "0x…"); // a payer's balances + fees per network (public)
+```
+
+Payments (`payments.list`) and orders carry `network`, `token`, `chain_id` and `explorer_url`.
+
 Signing and revoking require `{ confirm: true }` by default — a guard against a stray agent call committing funds or killing a live link. Trusted scripts can opt out once with `createXenarch({ ..., requireConfirm: false })`.
 
 ### Metered subscriptions (usage-based billing)

@@ -47,12 +47,14 @@ export function registerOrdersCommands(program: Command): void {
         }
         console.log(
           formatTable(
-            ["Order", "Product", "Buyer", "Amount", "Status", "Destination", "Paid"],
+            ["Order", "Product", "Buyer", "Amount", "Coin", "Network", "Status", "Destination", "Paid"],
             res.orders.map((o) => [
               o.order_id,
               o.product_name ?? dim("—"),
               o.buyer_name ?? o.buyer_email ?? dim("—"),
               usd(o.amount_usd),
+              o.token ?? "USDC",
+              o.network ?? "base",
               o.status === "shipped" ? green(o.status) : yellow(o.status),
               o.destination ?? dim("—"),
               o.paid_at,

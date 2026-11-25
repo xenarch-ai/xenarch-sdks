@@ -42,7 +42,6 @@ import {
   type PayLinkListResponse,
   type PayLinkDetail,
   type PayLinkRevokeResponse,
-  type MerchantPaymentListResponse,
   type SubscriberListResponse,
   type MerchantProfileResponse,
   type MerchantProfileBody,
@@ -107,6 +106,11 @@ import type {
   OrderListResponse,
   OrderExportOptions,
   Order,
+  MerchantPaymentListResponse,
+  NetworksResponse,
+  LinkNetworksChoice,
+  LinkNetworksResponse,
+  WalletScanResponse,
   ShipOrderInput,
   EarningsSummaryResponse,
   ServiceCreateInput,
@@ -564,6 +568,61 @@ class LinksApi {
     );
   }
 
+  /**
+   * Which networks and stablecoins a link takes (owner-only, XEN-678):
+   * the stored choice, every network it takes now, and every network this
+   * server can turn on.
+   */
+  async networks(linkId: string): Promise<LinkNetworksResponse> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "GET",
+      `/v1/links/${encodeURIComponent(linkId)}/networks`,
+    );
+  }
+
+  /**
+   * Set which networks and stablecoins a link takes beyond Base USDC
+   * (whole-state; `{}` = Base USDC only). Tron needs `pay_to` (the store's
+   * T-address). Not part of the signed params, so open checkouts keep working.
+   *
+   *     await sdk.merchant.links.setNetworks("lnk_…", {
+   *       ethereum: { tokens: ["USDC", "USDT"] },
+   *       tron: { tokens: ["USDT"], pay_to: "T…" },
+   *     });
+   */
+  async setNetworks(
+    linkId: string,
+    networks: LinkNetworksChoice,
+  ): Promise<LinkNetworksResponse> {
+    return meSessionRequest(
+      this.c.apiBase,
+      this.c._session(),
+      "PUT",
+      `/v1/links/${encodeURIComponent(linkId)}/networks`,
+      { networks },
+    );
+  }
+
+  /**
+   * A payer wallet's USDC/USDT balances on every wallet network this link
+   * takes, with each network's fee and whether the wallet can cover it
+   * (public, no auth; the address is not stored).
+   */
+  async walletScan(linkId: string, address: string): Promise<WalletScanResponse> {
+    return publicRequest(
+      this.c.apiBase,
+      "GET",
+      `/v1/links/${encodeURIComponent(linkId)}/wallet-scan?${toQuery({ address })}`,
+    );
+  }
+
+  /** Every network and stablecoin this server takes payments on (`GET /v1/networks`, public). */
+  async availableNetworks(): Promise<NetworksResponse> {
+    return publicRequest(this.c.apiBase, "GET", "/v1/networks");
+  }
+
   /** Read the webhook config for a link. */
   async getWebhook(linkId: string): Promise<PayLinkWebhookConfig> {
     return meSessionRequest(
@@ -708,7 +767,13 @@ class PaymentsApi {
 
   /** List payments received across your links, newest-first. */
   async list(opts: ListOptions = {}): Promise<MerchantPaymentListResponse> {
-    return listMerchantPayments(this.c.apiBase, this.c._session(), buildQuery(opts));
+    // Core's published item type predates the network fields (XEN-708); the
+    // platform sends them on every item.
+    return (await listMerchantPayments(
+      this.c.apiBase,
+      this.c._session(),
+      buildQuery(opts),
+    )) as MerchantPaymentListResponse;
   }
 }
 
