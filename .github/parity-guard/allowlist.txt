@@ -1,0 +1,36 @@
+# Parity guard allowlist (XEN-716). One glob per line, matched against the
+# repo-relative path (fnmatch: `*` also crosses `/`). Only parts that are
+# Base-only BY DESIGN belong here; everything else names a payment's coin,
+# network and explorer from the networks registry (GET /v1/networks).
+
+# The guard itself and the rule's documentation.
+.github/parity-guard/*
+.github/workflows/parity-guard.yml
+CLAUDE.md
+
+# Tests, smoke scripts and fixtures.
+*/tests/*
+*/test/*
+*.test.ts
+python/scripts/*
+
+# x402 agent payments and gates: USDC on Base by design (EIP-3009). The
+# readmes and package manifests describe those SDKs.
+README.md
+*/README.md
+cli/package.json
+js/*/package.json
+python/pyproject.toml
+cli/src/lib/payment.ts
+cli/src/types.ts
+js/sdk/src/index.ts
+python/xenarch/x402/*
+python/xenarch/_payer.py
+python/xenarch/_defaults.py
+python/xenarch/_agent_*
+python/xenarch/tools/*
+python/xenarch/middleware.py
+python/xenarch/decorator.py
+
+# Signed link params (settle in USDC on Base).
+python/xenarch/merchant/_signing.py
