@@ -57,3 +57,57 @@ describe("XenarchCheckout iframe permissions", () => {
     expect(frame!.getAttribute("src")).toContain(`${HOSTED_ORIGIN}/l/${LINK_ID}`);
   });
 });
+
+// XEN-717: the multi-network pay box tells the embedding page which coin and
+// network paid. Tron hashes carry no 0x.
+describe("XenarchCheckout events", () => {
+  const EVM_TX = "0x" + "ab".repeat(32);
+  const TRON_TX = "cd".repeat(32);
+
+  function post(data: unknown, origin = HOSTED_ORIGIN) {
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { data, origin }));
+    });
+  }
+
+  it("onPaid gets the network and token of a Tron USDT payment", () => {
+    const got: unknown[] = [];
+    render({ linkId: LINK_ID, mode: "inline", onPaid: (e) => got.push(e) });
+    post({ type: "xenarch:paid", linkId: LINK_ID, txHash: TRON_TX, network: "tron", token: "USDT" });
+    expect(got).toEqual([
+      { type: "xenarch:paid", linkId: LINK_ID, txHash: TRON_TX, network: "tron", token: "USDT" },
+    ]);
+  });
+
+  it("onTerminal gets an underpaid payment with its network and token", () => {
+    const got: unknown[] = [];
+    render({ linkId: LINK_ID, mode: "inline", onTerminal: (e) => got.push(e) });
+    post({ type: "xenarch:underpaid", linkId: LINK_ID, txHash: EVM_TX, network: "bnb", token: "USDC" });
+    expect(got).toEqual([
+      { type: "xenarch:underpaid", linkId: LINK_ID, txHash: EVM_TX, network: "bnb", token: "USDC" },
+    ]);
+  });
+
+  it("still accepts an older page's event without network or token", () => {
+    const got: unknown[] = [];
+    render({ linkId: LINK_ID, mode: "inline", onPaid: (e) => got.push(e) });
+    post({ type: "xenarch:paid", linkId: LINK_ID, txHash: EVM_TX });
+    expect(got).toEqual([{ type: "xenarch:paid", linkId: LINK_ID, txHash: EVM_TX }]);
+  });
+
+  it("drops malformed network, token and hash values", () => {
+    const got: Array<Record<string, unknown>> = [];
+    render({ linkId: LINK_ID, mode: "inline", onPaid: (e) => got.push(e as Record<string, unknown>) });
+    post({ type: "xenarch:paid", linkId: LINK_ID, txHash: "0x1234", network: "<img onerror=x>", token: { s: "USDT" } });
+    expect(got).toHaveLength(1);
+    expect(got[0]).toEqual({ type: "xenarch:paid", linkId: LINK_ID, txHash: undefined });
+  });
+
+  it("ignores another origin and another link", () => {
+    const got: unknown[] = [];
+    render({ linkId: LINK_ID, mode: "inline", onPaid: (e) => got.push(e) });
+    post({ type: "xenarch:paid", linkId: LINK_ID, network: "base", token: "USDC" }, "https://evil.example");
+    post({ type: "xenarch:paid", linkId: "otherLink99999", network: "base", token: "USDC" });
+    expect(got).toEqual([]);
+  });
+});

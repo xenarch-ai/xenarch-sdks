@@ -61,8 +61,22 @@ export type XenarchEventType =
 export type XenarchEvent = {
   type: XenarchEventType;
   linkId: string;
+  /** The payment's transaction: `0x…` on EVM networks, 64 hex on Tron. */
   txHash?: string;
+  /** The network the payment moved on: "base", "ethereum", "bnb", "monad",
+   *  "tron" (XEN-717). Absent from older hosted pages. */
+  network?: string;
+  /** The coin that paid: "USDC" or "USDT" (XEN-717). Monad's USDT is Tether's
+   *  USDT0 and arrives as "USDT". */
+  token?: string;
 };
+
+// A tx hash the hosted page may send: 0x + 64 hex (EVM) or 64 hex (Tron).
+const TX_HASH_RE = /^(0x)?[0-9a-fA-F]{64}$/;
+// Network keys and coin symbols are short plain identifiers; anything else is
+// dropped rather than handed to the merchant's callback.
+const NETWORK_RE = /^[a-z0-9-]{1,32}$/;
+const TOKEN_RE = /^[A-Z0-9]{2,12}$/;
 
 export type XenarchCheckoutProps = {
   /** Pay-link ID (the part after `pay.xenarch.com/l/`). */
@@ -149,7 +163,7 @@ function attachXenarchListener(
     const evLinkId = obj.linkId;
     if (typeof evLinkId !== "string" || evLinkId !== linkId) return;
     const txHash =
-      typeof obj.txHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(obj.txHash)
+      typeof obj.txHash === "string" && TX_HASH_RE.test(obj.txHash)
         ? obj.txHash
         : undefined;
     const ev: XenarchEvent = {
@@ -157,6 +171,12 @@ function attachXenarchListener(
       linkId: evLinkId,
       txHash,
     };
+    if (typeof obj.network === "string" && NETWORK_RE.test(obj.network)) {
+      ev.network = obj.network;
+    }
+    if (typeof obj.token === "string" && TOKEN_RE.test(obj.token)) {
+      ev.token = obj.token;
+    }
     if (ev.type === "xenarch:paid") {
       handlers.onPaid?.(ev);
     } else if (ev.type === "xenarch:close") {
