@@ -16,7 +16,9 @@ class PaymentsAPI:
     ) -> dict[str, Any]:
         """List payments received across your links, newest-first.
 
-        Returns ``{payments, has_more, next_cursor}``.
+        Returns ``{payments, has_more, next_cursor}``. Each payment carries
+        ``network`` (base, ethereum, bnb, monad, tron), ``token`` (USDC or
+        USDT), ``chain_id`` (``None`` on Tron) and ``explorer_url``.
         """
         return self._c._transport.request(
             "GET",

@@ -177,6 +177,22 @@ mc.links.revoke(link["link_id"], confirm=True)
 
 `create` always validates first, so "validate ok ⇒ create ok". An `Idempotency-Key` is generated per create, which dedupes a network-level retry of that one request (re-running `create` mints a fresh nonce, so it makes a new link).
 
+### Networks and coins
+
+Every link takes USDC on Base. Owners can also accept USDC and USDT on Ethereum, BNB Chain and Monad, and USDT on Tron:
+
+```python
+mc.links.available_networks()          # every network + coin this server takes (public)
+mc.links.networks("lnk_…")             # what this link takes now
+mc.links.set_networks("lnk_…", {       # whole-state; {} = Base USDC only
+    "ethereum": {"tokens": ["USDC", "USDT"]},
+    "tron": {"tokens": ["USDT"], "pay_to": "T…"},  # Tron pays the store's T-address
+})
+mc.links.wallet_scan("lnk_…", "0x…")   # a payer's balances + fees per network (public)
+```
+
+Each item from `payments.list()` carries `network`, `token`, `chain_id` and `explorer_url`.
+
 Signing and revoking require `confirm=True` by default — a guard against a stray agent call committing funds or killing a live link. Trusted scripts can opt out once with `MerchantClient(..., require_confirm=False)`.
 
 ## Verify webhooks: `xenarch.webhooks`

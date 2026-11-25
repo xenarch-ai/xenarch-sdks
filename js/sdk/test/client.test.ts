@@ -495,3 +495,74 @@ describe("links.capSuggestions (XEN-625)", () => {
     });
   });
 });
+
+describe("links networks + wallet scan (XEN-719)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const NETWORKS = {
+    link_id: "lnk_1",
+    accepted_networks: { tron: { tokens: ["USDT"], pay_to: "TXYZ" } },
+    networks: [{ network: "base", pay_to: "0xabc", tokens: [{ symbol: "USDC" }] }],
+    available: [{ network: "tron", tokens: ["USDT"], always_on: false, needs_pay_to: true }],
+  };
+
+  it("networks GETs the owner's network choice", async () => {
+    const calls = stubFetch({ json: NETWORKS });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.links.networks("lnk_1");
+    expect(calls[0].url).toBe("https://api.test/v1/links/lnk_1/networks");
+    expect(calls[0].init.method).toBe("GET");
+    expect(res.available[0].needs_pay_to).toBe(true);
+  });
+
+  it("setNetworks PUTs the whole choice under `networks`", async () => {
+    const calls = stubFetch({ json: NETWORKS });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    await sdk.merchant.links.setNetworks("lnk_1", {
+      ethereum: { tokens: ["USDC", "USDT"] },
+      tron: { tokens: ["USDT"], pay_to: "TXYZ" },
+    });
+    expect(calls[0].url).toBe("https://api.test/v1/links/lnk_1/networks");
+    expect(calls[0].init.method).toBe("PUT");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({
+      networks: {
+        ethereum: { tokens: ["USDC", "USDT"] },
+        tron: { tokens: ["USDT"], pay_to: "TXYZ" },
+      },
+    });
+  });
+
+  it("walletScan GETs the public scan WITHOUT a session", async () => {
+    const calls = stubFetch({ json: { address: "0xAb", balances: [], unavailable: ["bnb"] } });
+    const sdk = createXenarch({ apiBase: "https://api.test" });
+    const res = await sdk.merchant.links.walletScan("lnk_1", "0xab");
+    expect(calls[0].url).toBe("https://api.test/v1/links/lnk_1/wallet-scan?address=0xab");
+    expect(calls[0].init.method).toBe("GET");
+    expect(res.unavailable).toEqual(["bnb"]);
+  });
+
+  it("availableNetworks GETs the public registry", async () => {
+    const calls = stubFetch({ json: { networks: [{ network: "base", always_on: true }] } });
+    const sdk = createXenarch({ apiBase: "https://api.test" });
+    const res = await sdk.merchant.links.availableNetworks();
+    expect(calls[0].url).toBe("https://api.test/v1/networks");
+    expect(res.networks[0].always_on).toBe(true);
+  });
+
+  it("payments.list items carry network, token and explorer_url", async () => {
+    stubFetch({
+      json: {
+        payments: [
+          { id: "p1", network: "tron", token: "USDT", chain_id: null, explorer_url: "https://tronscan.org/#/transaction/ab" },
+        ],
+        has_more: false,
+        next_cursor: null,
+      },
+    });
+    const sdk = createXenarch({ apiBase: "https://api.test", sessionToken: "t" });
+    const res = await sdk.merchant.payments.list();
+    expect(res.payments[0].network).toBe("tron");
+    expect(res.payments[0].token).toBe("USDT");
+    expect(res.payments[0].chain_id).toBeNull();
+  });
+});

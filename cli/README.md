@@ -104,6 +104,19 @@ Toggle the kill switch off at https://dash.xenarch.dev/agent/scope
 
 If the platform itself is unreachable (control plane down, network error), the CLI fails closed: refuses to pay rather than risk bypassing a cap or kill switch you configured. Brief platform outages briefly stall payments; the fail-closed default protects budgets over throughput.
 
+## Networks and coins
+
+Every pay link takes USDC on Base. You can also accept USDC and USDT on Ethereum, BNB Chain and Monad, and USDT on Tron:
+
+```bash
+xenarch links networks                                   # every network + coin this server takes
+xenarch links networks <link-id>                         # what a link takes now
+xenarch links networks <link-id> --set ethereum:USDC+USDT,tron:USDT --tron-address T…
+xenarch links networks <link-id> --set none              # back to Base USDC only
+```
+
+`payments list` and `orders list` show the coin and network of each payment.
+
 ## Links
 
 - Learn more: https://xenarch.com

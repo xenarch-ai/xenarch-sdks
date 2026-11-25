@@ -373,6 +373,14 @@ export interface Order {
   tracking: string | null;
   tx_hash: string;
   paid_at: string;
+  /** Network the payment arrived on (a `GET /v1/networks` key). */
+  network?: string;
+  /** Stablecoin paid: USDC or USDT. */
+  token?: string;
+  /** EVM chain id; null on Tron. */
+  chain_id?: number | null;
+  /** The transaction on that network's block explorer. */
+  explorer_url?: string | null;
 }
 
 export interface OrderListResponse {
@@ -852,6 +860,14 @@ export interface MerchantPaymentItem {
   subscription_id: string | null;
   cycle: number | null;
   created_at: string;
+  /** Network the payment arrived on (a `GET /v1/networks` key). */
+  network?: string;
+  /** Stablecoin paid: USDC or USDT. */
+  token?: string;
+  /** EVM chain id; null on Tron. */
+  chain_id?: number | null;
+  /** The transaction on that network's block explorer. */
+  explorer_url?: string | null;
 }
 
 export interface MerchantPaymentListResponse {
@@ -1049,4 +1065,55 @@ export interface PayLinkClaimResponse {
   paid_and_single_use: boolean;
   created: boolean;
   manage_url: string | null;
+}
+
+// --- networks (XEN-678 / XEN-708 / XEN-719) --------------------------------
+
+/** `{ ethereum: { tokens: ["USDC"] }, tron: { tokens: ["USDT"], pay_to: "T…" } }`; `{}` = Base USDC only. */
+export type LinkNetworksChoice = Record<string, { tokens: string[]; pay_to?: string }>;
+
+export interface LinkNetworkOffer {
+  network: string;
+  label: string;
+  kind: string;
+  chain_id: number | null;
+  wallet: boolean;
+  explorer_name: string;
+  pay_to: string;
+  tokens: { symbol: string; address: string; decimals: number }[];
+}
+
+export interface LinkNetworkChoiceOption {
+  network: string;
+  label: string;
+  kind: string;
+  wallet: boolean;
+  tokens: string[];
+  always_on: boolean;
+  needs_pay_to: boolean;
+}
+
+export interface LinkNetworksResponse {
+  link_id: string;
+  accepted_networks: LinkNetworksChoice | null;
+  networks: LinkNetworkOffer[];
+  available: LinkNetworkChoiceOption[];
+}
+
+export interface NetworkInfo {
+  network: string;
+  label: string;
+  kind: string;
+  chain_id: number | null;
+  confirmations: number;
+  wallet: boolean;
+  explorer_name: string;
+  explorer_tx: string;
+  always_on: boolean;
+  needs_pay_to: boolean;
+  coins: { symbol: string; display: string; address: string; decimals: number }[];
+}
+
+export interface NetworksResponse {
+  networks: NetworkInfo[];
 }

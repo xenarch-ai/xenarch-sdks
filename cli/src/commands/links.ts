@@ -21,7 +21,11 @@ import {
   testLinkWebhook,
   listLinkWebhookDeliveries,
   retryLinkWebhookDelivery,
+  getNetworks,
+  getLinkNetworks,
+  putLinkNetworks,
 } from "../lib/api.js";
+import { parseNetworkSpec } from "../lib/networks.js";
 import { signPayLink, stringifyNumbers, type PayLinkLit } from "../lib/pay-link-signer.js";
 import { newIdempotencyKey, recordIdempotency } from "../lib/idempotency.js";
 import {
@@ -556,6 +560,97 @@ export function registerLinksCommands(program: Command): void {
           return;
         }
         console.log(`${green("Link moved.")} ${r.link_id} → ${r.group_id ?? dim("ungrouped")}`);
+      } catch (err) {
+        fail(err);
+      }
+    });
+
+  // --- networks (XEN-678 / XEN-719) ---------------------------------------
+  links
+    .command("networks [id]")
+    .description(
+      "Show or set which networks and coins a link takes (no id: list every network this server takes)",
+    )
+    .option(
+      "--set <list>",
+      "Whole-state: network:COIN[+COIN],… e.g. ethereum:USDC+USDT,tron:USDT ('none' = Base USDC only)",
+    )
+    .option("--tron-address <address>", "The store's Tron (T…) receiving address, required with tron")
+    .option("--confirm", "Confirm non-interactively")
+    .action(async (id: string | undefined, opts, cmd: Command) => {
+      try {
+        const apiBase = await resolveApiBase(cmd);
+        const { jsonOutput } = ctx(cmd, apiBase);
+        if (!id) {
+          if (opts.set) throw new Error("--set needs a link id: xenarch links networks <id> --set …");
+          const reg = await getNetworks(apiBase);
+          if (jsonOutput) {
+            console.log(JSON.stringify(reg));
+            return;
+          }
+          console.log(
+            formatTable(
+              ["Network", "Coins", "Chain", "Confirms", "Pay by", "Explorer"],
+              reg.networks.map((n) => [
+                n.always_on ? `${n.network} (always on)` : n.network,
+                n.coins.map((c) => (c.display !== c.symbol ? `${c.symbol} (${c.display})` : c.symbol)).join(", "),
+                n.chain_id === null ? "—" : String(n.chain_id),
+                String(n.confirmations),
+                n.wallet ? "wallet or send" : "send to address",
+                n.explorer_name,
+              ]),
+            ),
+          );
+          return;
+        }
+        // Parse before the session check so a bad --set fails on its own terms.
+        const choice =
+          opts.set !== undefined ? parseNetworkSpec(opts.set, opts.tronAddress) : undefined;
+        const token = await loadSession();
+        let res;
+        if (choice !== undefined) {
+          const summary = Object.keys(choice).length
+            ? Object.entries(choice)
+                .map(([n, e]) => `${n}: ${e.tokens.join("+")}`)
+                .join(", ")
+            : "nothing beyond Base USDC";
+          const ok = await confirmMutation(
+            jsonOutput,
+            `Set link ${id} to take Base USDC plus ${summary}?`,
+            "set_link_networks",
+            opts,
+          );
+          if (!ok) return;
+          res = await putLinkNetworks(apiBase, token, id, choice);
+        } else {
+          res = await getLinkNetworks(apiBase, token, id);
+        }
+        if (jsonOutput) {
+          console.log(JSON.stringify(res));
+          return;
+        }
+        if (choice !== undefined) console.log(green("Networks set."));
+        console.log(
+          formatTable(
+            ["Network", "Coins", "Pays to", "Pay by"],
+            res.networks.map((n) => [
+              n.label,
+              n.tokens.map((t) => t.symbol).join(", "),
+              n.pay_to,
+              n.wallet ? "wallet or send" : "send to address",
+            ]),
+          ),
+        );
+        const off = res.available.filter(
+          (a) => !a.always_on && !res.networks.some((n) => n.network === a.network),
+        );
+        if (off.length) {
+          console.log(
+            dim(
+              `  also available: ${off.map((a) => `${a.network}:${a.tokens.join("+")}`).join(", ")}`,
+            ),
+          );
+        }
       } catch (err) {
         fail(err);
       }

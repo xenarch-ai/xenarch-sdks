@@ -32,10 +32,12 @@ export function registerPaymentsCommands(program: Command): void {
         }
         console.log(
           formatTable(
-            ["When", "Amount", "From", "Status", "Link", "Tx"],
+            ["When", "Amount", "Coin", "Network", "From", "Status", "Link", "Tx"],
             res.payments.map((p) => [
               p.created_at,
               usd(p.amount_usd),
+              p.token ?? "USDC",
+              p.network ?? "base",
               `${p.from_address.slice(0, 10)}…`,
               p.status === "confirmed" ? green(p.status) : yellow(p.status),
               p.link_id,

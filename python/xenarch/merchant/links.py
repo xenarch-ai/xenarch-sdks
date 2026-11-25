@@ -1,4 +1,5 @@
-"""Pay-link CRUD — list, get, create (validate → sign → create), revoke.
+"""Pay-link CRUD — list, get, create (validate → sign → create), revoke —
+plus the networks a link takes and a payer wallet scan (XEN-678/719).
 
 Create mirrors the CLI / MCP flow exactly:
 1. ``POST /v1/links/validate`` collects every missing/invalid field up front,
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from xenarch.merchant import _idempotency, _signing
 
@@ -130,3 +132,51 @@ class LinksAPI:
         """
         self._c._ensure_confirmed(confirm, f"revoke link {link_id}")
         return self._c._transport.request("DELETE", f"/links/{link_id}")
+
+    def networks(self, link_id: str) -> dict[str, Any]:
+        """Which networks and stablecoins a link takes (owner-only).
+
+        ``{link_id, accepted_networks, networks, available}``:
+        the stored choice (``None`` = Base USDC only), every network the
+        link takes now (Base first, with its ``pay_to``), and every network
+        this server can turn on.
+        """
+        return self._c._transport.request("GET", f"/links/{quote(link_id, safe='')}/networks")
+
+    def set_networks(
+        self, link_id: str, networks: dict[str, dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Set which networks and stablecoins a link takes beyond Base USDC.
+
+        Whole-state replace; ``{}`` goes back to Base USDC only. Tron needs
+        ``pay_to`` (the store's T-address)::
+
+            client.links.set_networks("lnk_…", {
+                "ethereum": {"tokens": ["USDC", "USDT"]},
+                "tron": {"tokens": ["USDT"], "pay_to": "T…"},
+            })
+
+        Not part of the signed params, so open checkouts keep working.
+        Returns the same shape as :meth:`networks`.
+        """
+        return self._c._transport.request(
+            "PUT", f"/links/{quote(link_id, safe='')}/networks", json_body={"networks": networks}
+        )
+
+    def wallet_scan(self, link_id: str, address: str) -> dict[str, Any]:
+        """A payer wallet's USDC/USDT balances on every wallet network the
+        link takes, each with its network fee and whether the wallet can
+        cover it. Public; the address is not stored.
+
+        ``{address, balances: [{network, token, balance_micro, fee_usd,
+        has_gas, …}], unavailable}``.
+        """
+        return self._c._transport.request(
+            "GET", f"/links/{quote(link_id, safe='')}/wallet-scan", params={"address": address}
+        )
+
+    def available_networks(self) -> dict[str, Any]:
+        """Every network and stablecoin this server takes payments on
+        (``GET /v1/networks``, public): ``{networks: [{network, chain_id,
+        explorer_tx, always_on, needs_pay_to, coins, …}]}``."""
+        return self._c._transport.request("GET", "/networks")
